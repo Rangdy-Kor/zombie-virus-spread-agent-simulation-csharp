@@ -3,55 +3,110 @@ using ZombieVirusSpreadAgentSimulation.Core;
 
 namespace ZombieVirusSpreadAgentSimulation.SimulationApp;
 
-class Program
+internal static class Program
 {
-    static void Main(string[] args)
+    private static readonly Lock SimLock = new Lock();
+    
+    private static volatile bool _isPaused;
+    private static volatile SimEngine? _engine;
+
+    private static void Main()
     {
         // Raylib 초기화
-        Raylib.InitWindow(SimConfig.ScreenWidth, SimConfig.ScreenHeight, "Zombie Virus Spread Simulation");
+        Raylib.InitWindow(SimConfig.ScreenWidth, SimConfig.ScreenHeight, "Zombie Virus Spread Agent Simulation");
         Raylib.SetTargetFPS(SimConfig.TargetFps);
-        Raylib.SetExitKey(KeyboardKey.Null);  // ESC 키로 창이 닫히지 않도록 설정
-
-        // 시뮬레이션 엔진 (초기 설정 후 생성)
-        SimEngine? engine = null;
 
         // 통계 변수
-        int tickCount = 0;
-        bool isPaused = false;
-        int simulationSpeed = SimConfig.TicksPerFrame;
+        var tickCount = 0;
+        var simulationSpeed = SimConfig.TicksPerFrame;
 
         // 모드 변수
-        bool isSetupMode = true;  // 시작 시 설정 모드로 시작
-        bool isAdvancedSetupMode = false;  // 고급 설정 모드
-        bool isEditMode = false;
-        int editSelectedIndex = 0;
-        int setupSelectedIndex = 0;
-        int advancedSetupSelectedIndex = 0;
+        var isSetupMode = true;  // 시작 시 설정 모드로 시작
+        var isAdvancedSetupMode = false;  // 고급 설정 모드
+        var isEditMode = false;
+        var editSelectedIndex = 0;
+        var setupSelectedIndex = 0;
+        var advancedSetupSelectedIndex = 0;
         const int editItemCount = 14;
         const int setupItemCount = 4;  // 3개 기본 + 1개 고급설정 메뉴
         const int advancedSetupItemCount = 14;
+        
+        var cts = new CancellationTokenSource();
+        var calculationTask = Task.Run(() =>
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var nextTickTime = 0.0; // 다음 틱을 실행해야 할 목표 시간 (ms)
+            
+            while (!cts.Token.IsCancellationRequested)
+            {
+                var localEngine = _engine;
+                if (!_isPaused && localEngine != null)
+                {
+                    // ReSharper disable once AccessToModifiedClosure
+                    var msPerTick = 1000.0 / (SimConfig.MaxTicksPerSecond * simulationSpeed);
+                    var waitTime = nextTickTime - stopwatch.Elapsed.TotalMilliseconds;
+
+                    switch (waitTime)
+                    {
+                        case > 2:
+                            Thread.Sleep(1);       // 여유 있을 땐 Sleep
+                            break;
+                        case > 0:
+                            Thread.SpinWait(100);  // 임박했을 땐 SpinWait으로 정밀 대기
+                            break;
+                        default:
+                        {
+                            lock (SimLock)
+                            {
+                                localEngine.Update();
+                                // ReSharper disable once AccessToModifiedClosure
+                                tickCount++;
+                            }
+                            nextTickTime += msPerTick;
+
+                            if (stopwatch.Elapsed.TotalMilliseconds > nextTickTime + 200)
+                                nextTickTime = stopwatch.Elapsed.TotalMilliseconds;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    Thread.Sleep(1);
+                    nextTickTime = stopwatch.Elapsed.TotalMilliseconds;
+                }
+            }
+        }, cts.Token);
 
         while (!Raylib.WindowShouldClose())
         {
+            var increase = Raylib.IsKeyPressed(KeyboardKey.Right) || Raylib.IsKeyPressed(KeyboardKey.Equal);
+            var decrease = Raylib.IsKeyPressed(KeyboardKey.Left) || Raylib.IsKeyPressed(KeyboardKey.Minus);
+            var bigChange = Raylib.IsKeyDown(KeyboardKey.LeftShift) ||  Raylib.IsKeyDown(KeyboardKey.RightShift);
+            var smallChange = Raylib.IsKeyDown(KeyboardKey.LeftControl) ||  Raylib.IsKeyDown(KeyboardKey.RightControl);
+            var multiplier = 1f;
+            
             // 고급 설정 모드
             if (isAdvancedSetupMode)
             {
+                Raylib.SetExitKey(KeyboardKey.Null);  // ESC 키로 창이 닫히지 않도록 설정
+                
                 // 고급 설정 모드 입력 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Up)) advancedSetupSelectedIndex = Math.Max(advancedSetupSelectedIndex - 1, 0);
                 if (Raylib.IsKeyPressed(KeyboardKey.Down)) advancedSetupSelectedIndex = Math.Min(advancedSetupSelectedIndex + 1, advancedSetupItemCount - 1);
-                if (Raylib.IsKeyPressed(KeyboardKey.Escape) || Raylib.IsKeyPressed(KeyboardKey.Backspace))
+                
+                if (Raylib.IsKeyPressed(KeyboardKey.Escape) || Raylib.IsKeyPressed(KeyboardKey.Enter))
                 {
                     isAdvancedSetupMode = false;  // 기본 설정으로 돌아감
                 }
 
-                // 값 조절
-                bool increase = Raylib.IsKeyPressed(KeyboardKey.Right) || Raylib.IsKeyPressed(KeyboardKey.Equal);
-                bool decrease = Raylib.IsKeyPressed(KeyboardKey.Left) || Raylib.IsKeyPressed(KeyboardKey.Minus);
-                bool bigChange = Raylib.IsKeyDown(KeyboardKey.LeftShift);
-
                 if (increase || decrease)
                 {
-                    float multiplier = bigChange ? 10f : 1f;
+                    if (bigChange || smallChange)
+                    {
+                        multiplier = bigChange ? 10f : 0.5f;
+                    }
+                    
                     AdjustAdvancedSetupValue(advancedSetupSelectedIndex, increase, multiplier);
                 }
 
@@ -66,18 +121,19 @@ class Program
             // 초기 설정 모드
             if (isSetupMode)
             {
+                Raylib.SetExitKey(KeyboardKey.Escape);  // ESC 키로 창을 닫을 수 있도록 다시 설정
+                
                 // 설정 모드 입력 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Up)) setupSelectedIndex = Math.Max(setupSelectedIndex - 1, 0);
                 if (Raylib.IsKeyPressed(KeyboardKey.Down)) setupSelectedIndex = Math.Min(setupSelectedIndex + 1, setupItemCount - 1);
 
-                // 값 조절 (고급 설정 항목이 아닐 때만)
-                bool increase = Raylib.IsKeyPressed(KeyboardKey.Right) || Raylib.IsKeyPressed(KeyboardKey.Equal);
-                bool decrease = Raylib.IsKeyPressed(KeyboardKey.Left) || Raylib.IsKeyPressed(KeyboardKey.Minus);
-                bool bigChange = Raylib.IsKeyDown(KeyboardKey.LeftShift);
-
-                if ((increase || decrease) && setupSelectedIndex < 3)
+                if (increase || decrease)
                 {
-                    int multiplier = bigChange ? 10 : 1;
+                    if (bigChange || smallChange)
+                    {
+                        multiplier = bigChange ? 10f : 0.5f;
+                    }
+                    
                     AdjustSetupValue(setupSelectedIndex, increase, multiplier);
                 }
 
@@ -88,14 +144,15 @@ class Program
                     {
                         isAdvancedSetupMode = true;
                     }
-                    else
-                    {
-                        // 시뮬레이션 시작
-                        engine = new SimEngine(SimConfig.PopulationCount);
-                        tickCount = 0;
-                        isPaused = false;
-                        isSetupMode = false;
-                    }
+                }
+                
+                if (Raylib.IsKeyPressed(KeyboardKey.K))
+                {
+                    // 시뮬레이션 시작
+                    _engine = new SimEngine(SimConfig.PopulationCount);
+                    tickCount = 0;
+                    _isPaused = false;
+                    isSetupMode = false;
                 }
 
                 // 렌더링
@@ -105,113 +162,121 @@ class Program
                 Raylib.EndDrawing();
                 continue;
             }
-
+            
+            Raylib.SetExitKey(KeyboardKey.Null);  // ESC 키로 창이 닫히지 않도록 설정
+            
             // 입력 처리
-            if (Raylib.IsKeyPressed(KeyboardKey.E) && !isSetupMode)
+            if (Raylib.IsKeyPressed(KeyboardKey.Tab) && !isEditMode)
             {
-                isEditMode = !isEditMode;
-                if (isEditMode) isPaused = true;
+                isEditMode = true;
+                _isPaused = true;
             }
-
-            if (isEditMode)
+            else if (isEditMode)
             {
                 // 편집 모드 입력 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Up)) editSelectedIndex = Math.Max(editSelectedIndex - 1, 0);
                 if (Raylib.IsKeyPressed(KeyboardKey.Down)) editSelectedIndex = Math.Min(editSelectedIndex + 1, editItemCount - 1);
-                if (Raylib.IsKeyPressed(KeyboardKey.Escape)) isEditMode = false;
-
-                // 값 조절
-                bool increase = Raylib.IsKeyPressed(KeyboardKey.Right) || Raylib.IsKeyPressed(KeyboardKey.Equal);
-                bool decrease = Raylib.IsKeyPressed(KeyboardKey.Left) || Raylib.IsKeyPressed(KeyboardKey.Minus);
-                bool bigChange = Raylib.IsKeyDown(KeyboardKey.LeftShift);
+            
+                if (Raylib.IsKeyPressed(KeyboardKey.Tab) || Raylib.IsKeyPressed(KeyboardKey.Escape))
+                {
+                    isEditMode = false;
+                    _isPaused = false;
+                }
 
                 if (increase || decrease)
                 {
-                    float multiplier = bigChange ? 10f : 1f;
-                    AdjustEngineValue(engine!, editSelectedIndex, increase, multiplier);
+                    if (bigChange || smallChange)
+                    {
+                        multiplier = bigChange ? 10f : 0.5f;
+                    }
+    
+                    lock (SimLock)
+                    {
+                        AdjustEngineValue(_engine!, editSelectedIndex, increase, multiplier);
+                    }
                 }
+
             }
             else
             {
                 // 일반 모드 입력 처리
-                if (Raylib.IsKeyPressed(KeyboardKey.Space)) isPaused = !isPaused;
+                if (Raylib.IsKeyPressed(KeyboardKey.Space)) _isPaused = !_isPaused;
                 if (Raylib.IsKeyPressed(KeyboardKey.Up)) simulationSpeed = Math.Min(simulationSpeed + 1, 20);
                 if (Raylib.IsKeyPressed(KeyboardKey.Down)) simulationSpeed = Math.Max(simulationSpeed - 1, 1);
-                if (Raylib.IsKeyPressed(KeyboardKey.R))
+                if (Raylib.IsKeyPressed(KeyboardKey.F2) || Raylib.IsKeyPressed(KeyboardKey.Escape))
                 {
-                    // R키 누르면 설정 모드로 돌아감
+                    // F2, Esc키 누르면 설정 모드로 돌아감
                     isSetupMode = true;
-                    isPaused = true;
-                }
-            }
-
-            // 시뮬레이션 업데이트
-            if (!isPaused && engine != null)
-            {
-                for (int i = 0; i < simulationSpeed; i++)
-                {
-                    engine.Update();
-                    tickCount++;
+                    _isPaused = true;
                 }
             }
 
             // 통계 계산
-            var stats = engine != null ? CalculateStats(engine.Agents) : new Dictionary<AgentType, int>();
+            Agent[]? snapshot = null;
+            lock (SimLock)
+            {
+                var localEngine = _engine;
+                if (localEngine != null)
+                    snapshot = localEngine.Agents.ToArray();
+            }
 
-            // 렌더링
+            var stats = snapshot != null
+                ? CalculateStats(snapshot)
+                : new Dictionary<AgentType, int>();
+
             Raylib.BeginDrawing();
             Raylib.ClearBackground(new Color(20, 20, 30, 255));
 
-            if (engine != null)
+            var (simViewWidth, simViewHeight) = SimConfig.CalculateSimViewSize();
+
+            if (snapshot != null)
             {
-                // 시뮬레이션 뷰 크기 계산 (맵 비율에 따라)
-                var (simViewWidth, simViewHeight) = SimConfig.CalculateSimViewSize();
-
-                // 시뮬레이션 뷰 렌더링
-                DrawSimulationView(engine, 10, 10, simViewWidth, simViewHeight);
-
-                // UI 패널 렌더링 (시뮬레이션 뷰 오른쪽에 위치)
-                DrawUIPanel(stats, tickCount, isPaused, simulationSpeed, simViewWidth + 30, 10, isEditMode);
-
-                // 편집 모드 창 렌더링
+                DrawSimulationView(snapshot, 10, 10, simViewWidth, simViewHeight);
+                DrawUiPanel(stats, tickCount, _isPaused, simulationSpeed, simViewWidth + 30, 10, isEditMode);
                 if (isEditMode)
                 {
-                    DrawEditPanel(engine, editSelectedIndex);
+                    var localEngine = _engine;
+                    if (localEngine != null)
+                        DrawEditPanel(localEngine, editSelectedIndex);
                 }
             }
 
             Raylib.EndDrawing();
         }
-
+        
+        // 프로그램 종료 시 백그라운드 스레드도 함께 안전하게 종료
+        cts.Cancel();
+        // ReSharper disable once MethodSupportsCancellation
+        calculationTask.Wait();
+        
         Raylib.CloseWindow();
     }
 
-    static void DrawSimulationView(SimEngine engine, int x, int y, int width, int height)
+    private static void DrawSimulationView(Agent[] agents, int x, int y, int width, int height)
     {
         // 배경
         Raylib.DrawRectangle(x, y, width, height, new Color(10, 10, 15, 255));
         Raylib.DrawRectangleLines(x, y, width, height, Color.Gray);
 
         // 스케일 계산
-        float scaleX = (float)width / engine.MapWidth;
-        float scaleY = (float)height / engine.MapHeight;
+        var scaleX = width / SimConfig.MapWidth;
+        var scaleY = height / SimConfig.MapHeight;
 
-        // 에이전트 렌더링
-        int dotSize = SimConfig.AgentDotSize;
-        for (int i = 0; i < engine.Agents.Length; i++)
+        const int dotSize = SimConfig.AgentDotSize;
+        for (var i = 0; i < agents.Length; i++)
         {
-            ref Agent agent = ref engine.Agents[i];
+            ref Agent agent = ref agents[i];
             if (!agent.IsActive) continue;
 
-            int px = x + (int)(agent.X * scaleX);
-            int py = y + (int)(agent.Y * scaleY);
+            var px = x + (int)(agent.X * scaleX);
+            var py = y + (int)(agent.Y * scaleY);
 
-            Color color = GetAgentColor(agent.Type);
+            var color = GetAgentColor(agent.Type);
             Raylib.DrawRectangle(px, py, dotSize, dotSize, color);
         }
     }
 
-    static Color GetAgentColor(AgentType type)
+    private static Color GetAgentColor(AgentType type)
     {
         return type switch
         {
@@ -228,10 +293,10 @@ class Program
         };
     }
 
-    static void DrawUIPanel(Dictionary<AgentType, int> stats, int tickCount, bool isPaused, int speed, int x, int y, bool isEditMode = false)
+    private static void DrawUiPanel(Dictionary<AgentType, int> stats, int tickCount, bool isPaused, int speed, int x, int y, bool isEditMode = false)
     {
-        int lineHeight = 24;
-        int currentY = y;
+        const int lineHeight = 24;
+        var currentY = y;
 
         // 제목
         Raylib.DrawText("ZOMBIE SIMULATION", x, currentY, 24, Color.White);
@@ -246,31 +311,30 @@ class Program
         currentY += lineHeight + 20;
 
         // 그룹별 통계
-        DrawStatSection("UNINFECTED", x, ref currentY, lineHeight, new[]
-        {
+        DrawStatSection("UNINFECTED", x, ref currentY, lineHeight, [
             ("Civilian", stats.GetValueOrDefault(AgentType.Civilian), GetAgentColor(AgentType.Civilian)),
             ("Survivor", stats.GetValueOrDefault(AgentType.Survivor), GetAgentColor(AgentType.Survivor))
-        });
+        ]);
 
-        DrawStatSection("INFECTED", x, ref currentY, lineHeight, new[]
-        {
-            ("Inf.Civilian", stats.GetValueOrDefault(AgentType.InfectedCivilian), GetAgentColor(AgentType.InfectedCivilian)),
-            ("Inf.Survivor", stats.GetValueOrDefault(AgentType.InfectedSurvivor), GetAgentColor(AgentType.InfectedSurvivor)),
+
+        DrawStatSection("INFECTED", x, ref currentY, lineHeight, [
+            ("Infected Civilian", stats.GetValueOrDefault(AgentType.InfectedCivilian), GetAgentColor(AgentType.InfectedCivilian)),
+            ("Infected Survivor", stats.GetValueOrDefault(AgentType.InfectedSurvivor), GetAgentColor(AgentType.InfectedSurvivor)),
             ("Carrier", stats.GetValueOrDefault(AgentType.Carrier), GetAgentColor(AgentType.Carrier)),
             ("Zombie", stats.GetValueOrDefault(AgentType.Zombie), GetAgentColor(AgentType.Zombie))
-        });
+        ]);
 
-        DrawStatSection("ELIMINATED", x, ref currentY, lineHeight, new[]
-        {
+        DrawStatSection("ELIMINATED", x, ref currentY, lineHeight, [
+        
             ("Dead Zombie", stats.GetValueOrDefault(AgentType.DeadZombie), GetAgentColor(AgentType.DeadZombie)),
-            ("Rotten", stats.GetValueOrDefault(AgentType.RottenZombie), GetAgentColor(AgentType.RottenZombie)),
+            ("Rotten Zombie", stats.GetValueOrDefault(AgentType.RottenZombie), GetAgentColor(AgentType.RottenZombie)),
             ("Vanished", stats.GetValueOrDefault(AgentType.Vanished), GetAgentColor(AgentType.Vanished))
-        });
+        ]);
 
         // 합계
-        int totalAlive = stats.GetValueOrDefault(AgentType.Civilian) +
+        var totalAlive = stats.GetValueOrDefault(AgentType.Civilian) +
                          stats.GetValueOrDefault(AgentType.Survivor);
-        int totalInfected = stats.GetValueOrDefault(AgentType.InfectedCivilian) +
+        var totalInfected = stats.GetValueOrDefault(AgentType.InfectedCivilian) +
                             stats.GetValueOrDefault(AgentType.InfectedSurvivor) +
                             stats.GetValueOrDefault(AgentType.Carrier) +
                             stats.GetValueOrDefault(AgentType.Zombie);
@@ -286,12 +350,12 @@ class Program
         currentY += 20;
         Raylib.DrawText("[UP/DOWN] Speed", x, currentY, 16, Color.Gray);
         currentY += 20;
-        Raylib.DrawText("[R] Restart", x, currentY, 16, Color.Gray);
+        Raylib.DrawText("[F2/ESC] Restart", x, currentY, 16, Color.Gray);
         currentY += 20;
-        Raylib.DrawText("[E] Edit Constants", x, currentY, 16, isEditMode ? Color.Yellow : Color.Gray);
+        Raylib.DrawText("[TAB] Edit Constants", x, currentY, 16, isEditMode ? Color.Yellow : Color.Gray);
     }
 
-    static void DrawStatSection(string title, int x, ref int y, int lineHeight, (string name, int count, Color color)[] items)
+    private static void DrawStatSection(string title, int x, ref int y, int lineHeight, (string name, int count, Color color)[] items)
     {
         Raylib.DrawText(title, x, y, 18, Color.White);
         y += lineHeight;
@@ -305,15 +369,15 @@ class Program
         y += 10;
     }
 
-    static Dictionary<AgentType, int> CalculateStats(Agent[] agents)
+    private static Dictionary<AgentType, int> CalculateStats(Agent[] agents)
     {
         var stats = new Dictionary<AgentType, int>();
-        foreach (AgentType type in Enum.GetValues<AgentType>())
+        foreach (var type in Enum.GetValues<AgentType>())
         {
             stats[type] = 0;
         }
 
-        for (int i = 0; i < agents.Length; i++)
+        for (var i = 0; i < agents.Length; i++)
         {
             stats[agents[i].Type]++;
         }
@@ -321,20 +385,20 @@ class Program
         return stats;
     }
 
-    static void DrawEditPanel(SimEngine engine, int selectedIndex)
+    private static void DrawEditPanel(SimEngine engine, int selectedIndex)
     {
         // 반투명 배경
-        int panelWidth = 450;
-        int panelHeight = 500;
-        int panelX = (SimConfig.ScreenWidth - panelWidth) / 2;
-        int panelY = (SimConfig.ScreenHeight - panelHeight) / 2;
+        const int panelWidth = 450;
+        const int panelHeight = 500;
+        const int panelX = (SimConfig.ScreenWidth - panelWidth) / 2;
+        const int panelY = (SimConfig.ScreenHeight - panelHeight) / 2;
 
         Raylib.DrawRectangle(panelX, panelY, panelWidth, panelHeight, new Color(20, 20, 40, 240));
         Raylib.DrawRectangleLines(panelX, panelY, panelWidth, panelHeight, Color.White);
 
-        int lineHeight = 28;
-        int currentY = panelY + 15;
-        int textX = panelX + 20;
+        const int lineHeight = 28;
+        var currentY = panelY + 15;
+        const int textX = panelX + 20;
 
         // 제목
         Raylib.DrawText("EDIT CONSTANTS", panelX + panelWidth / 2 - 80, currentY, 22, Color.Yellow);
@@ -359,8 +423,8 @@ class Program
             ("Survivor Kill Chance", $"{engine.SurvivorKillChance:F2}", "COMBAT"),
         };
 
-        string lastCategory = "";
-        for (int i = 0; i < editItems.Length; i++)
+        var lastCategory = "";
+        for (var i = 0; i < editItems.Length; i++)
         {
             var item = editItems[i];
 
@@ -374,13 +438,13 @@ class Program
             }
 
             // 선택된 항목 하이라이트
-            bool isSelected = i == selectedIndex;
+            var isSelected = i == selectedIndex;
             if (isSelected)
             {
                 Raylib.DrawRectangle(textX - 5, currentY - 2, panelWidth - 30, 22, new Color(60, 60, 100, 255));
             }
 
-            Color textColor = isSelected ? Color.Yellow : Color.White;
+            var textColor = isSelected ? Color.Yellow : Color.White;
             Raylib.DrawText($"{item.name}", textX, currentY, 16, textColor);
             Raylib.DrawText($"{item.value}", textX + 200, currentY, 16, isSelected ? Color.Green : Color.LightGray);
 
@@ -400,19 +464,19 @@ class Program
         Raylib.DrawText("[SHIFT+LEFT/RIGHT] Fast Adjust  [ESC/E] Close", textX, currentY, 14, Color.Gray);
     }
 
-    static void DrawSetupPanel(int selectedIndex)
+    private static void DrawSetupPanel(int selectedIndex)
     {
-        int panelWidth = 550;
-        int panelHeight = 500;
-        int panelX = (SimConfig.ScreenWidth - panelWidth) / 2;
-        int panelY = (SimConfig.ScreenHeight - panelHeight) / 2;
+        const int panelWidth = 650;
+        const int panelHeight = 560;
+        const int panelX = (SimConfig.ScreenWidth - panelWidth) / 2;
+        const int panelY = (SimConfig.ScreenHeight - panelHeight) / 2;
 
         // 배경
         Raylib.DrawRectangle(panelX, panelY, panelWidth, panelHeight, new Color(25, 25, 45, 250));
         Raylib.DrawRectangleLines(panelX, panelY, panelWidth, panelHeight, Color.White);
 
-        int currentY = panelY + 25;
-        int textX = panelX + 30;
+        var currentY = panelY + 25;
+        const int textX = panelX + 30;
 
         // 제목
         Raylib.DrawText("SIMULATION SETUP", panelX + panelWidth / 2 - 110, currentY, 28, Color.Yellow);
@@ -420,20 +484,26 @@ class Program
 
         // 설명
         Raylib.DrawText("Configure initial parameters before starting", textX, currentY, 16, Color.Gray);
-        currentY += 40;
-
+        currentY += 30;
+        
+        Raylib.DrawText("Press ESC to Exit", textX, currentY, 16, Color.Gray);
+        currentY += 30;
+        
+        var popStr = $"{SimConfig.PopulationCount}";
+        var widthStr = $"{SimConfig.MapWidth} m";
+        var heightStr = $"{SimConfig.MapHeight} m";
+        
         // 설정 항목들
-        var setupItems = new (string name, string value, string description)[]
-        {
-            ("Population Count", $"{SimConfig.PopulationCount}", "Total number of agents"),
-            ("Map Width", $"{SimConfig.MapWidth} m", "Horizontal size of the map"),
-            ("Map Height", $"{SimConfig.MapHeight} m", "Vertical size of the map"),
-        };
+        (string name, string value, string description)[] setupItems = [
+            ("Population Count", popStr, "Total number of agents"),
+            ("Map Width", widthStr, "Horizontal size of the map"),
+            ("Map Height", heightStr, "Vertical size of the map")
+        ];
 
-        for (int i = 0; i < setupItems.Length; i++)
+        for (var i = 0; i < setupItems.Length; i++)
         {
             var item = setupItems[i];
-            bool isSelected = i == selectedIndex;
+            var isSelected = i == selectedIndex;
 
             // 선택된 항목 하이라이트
             if (isSelected)
@@ -441,8 +511,8 @@ class Program
                 Raylib.DrawRectangle(textX - 10, currentY - 5, panelWidth - 40, 45, new Color(60, 60, 100, 255));
             }
 
-            Color textColor = isSelected ? Color.Yellow : Color.White;
-            Color valueColor = isSelected ? Color.Green : Color.LightGray;
+            var textColor = isSelected ? Color.Yellow : Color.White;
+            var valueColor = isSelected ? Color.Green : Color.LightGray;
 
             Raylib.DrawText(item.name, textX, currentY, 20, textColor);
             Raylib.DrawText(item.value, textX + 250, currentY, 20, valueColor);
@@ -458,10 +528,10 @@ class Program
         }
 
         // 고급 설정 메뉴
-        bool isAdvancedSelected = selectedIndex == 3;
+        var isAdvancedSelected = selectedIndex == 3;
         if (isAdvancedSelected)
         {
-            Raylib.DrawRectangle(textX - 10, currentY - 5, panelWidth - 40, 35, new Color(80, 60, 100, 255));
+            Raylib.DrawRectangle(textX - 10, currentY - 5, panelWidth - 40, 45, new Color(80, 60, 100, 255));
         }
         Raylib.DrawText(">> Advanced Settings", textX, currentY, 20, isAdvancedSelected ? Color.Magenta : new Color(180, 150, 200, 255));
         Raylib.DrawText("Configure infection, combat, transition rates", textX, currentY + 22, 14, Color.Gray);
@@ -472,9 +542,9 @@ class Program
         currentY += 22;
 
         // 미리보기 영역 (최대 150x100 픽셀 내에서 비율 유지)
-        int previewMaxWidth = 150;
-        int previewMaxHeight = 80;
-        float mapAspect = (float)SimConfig.MapWidth / SimConfig.MapHeight;
+        const int previewMaxWidth = 150;
+        const int previewMaxHeight = 80;
+        var mapAspect = SimConfig.MapWidth / SimConfig.MapHeight;
         int previewWidth, previewHeight;
 
         if (mapAspect > (float)previewMaxWidth / previewMaxHeight)
@@ -499,36 +569,37 @@ class Program
         Raylib.DrawText($"({(mapAspect >= 1 ? mapAspect : 1/mapAspect):F2}:1)", textX + previewWidth + 15, currentY + 46, 14, Color.Gray);
 
         // 하단 안내
-        currentY = panelY + panelHeight - 70;
-        Raylib.DrawRectangle(textX - 10, currentY - 5, panelWidth - 40, 55, new Color(40, 60, 40, 200));
+        currentY = panelY + panelHeight - 80;
+        Raylib.DrawRectangle(textX - 10, currentY - 5, panelWidth - 40, 70, new Color(40, 60, 40, 200));
         Raylib.DrawText("[UP/DOWN] Select  [LEFT/RIGHT] Adjust", textX, currentY, 14, Color.LightGray);
         currentY += 18;
         Raylib.DrawText("[SHIFT+LEFT/RIGHT] Fast Adjust (+/-10x)", textX, currentY, 14, Color.LightGray);
         currentY += 18;
-        Raylib.DrawText("[ENTER] Start Simulation / Open Advanced", textX, currentY, 16, Color.Green);
+        Raylib.DrawText("[K] Start Simulation", textX, currentY, 16, Color.Green);
+        currentY += 18;
+        Raylib.DrawText("[Enter] Open Advanced", textX, currentY, 16, Color.Green);
     }
 
-    static void DrawAdvancedSetupPanel(int selectedIndex)
+    private static void DrawAdvancedSetupPanel(int selectedIndex)
     {
-        int panelWidth = 550;
-        int panelHeight = 600;
-        int panelX = (SimConfig.ScreenWidth - panelWidth) / 2;
-        int panelY = (SimConfig.ScreenHeight - panelHeight) / 2;
+        const int panelWidth = 550;
+        const int panelHeight = 600;
+        const int panelX = (SimConfig.ScreenWidth - panelWidth) / 2;
+        const int panelY = (SimConfig.ScreenHeight - panelHeight) / 2;
 
         // 배경
         Raylib.DrawRectangle(panelX, panelY, panelWidth, panelHeight, new Color(30, 25, 45, 250));
         Raylib.DrawRectangleLines(panelX, panelY, panelWidth, panelHeight, Color.Magenta);
 
-        int currentY = panelY + 15;
-        int textX = panelX + 25;
+        var currentY = panelY + 15;
+        const int textX = panelX + 25;
 
         // 제목
         Raylib.DrawText("ADVANCED SETTINGS", panelX + panelWidth / 2 - 110, currentY, 26, Color.Magenta);
         currentY += 40;
 
         // 편집 항목들
-        var advancedItems = new (string name, string value, string category)[]
-        {
+        (string name, string value, string category)[] advancedItems = [
             ("Zombie Speed", $"{SimConfig.InitZombieSpeed:F2}", "MOVEMENT"),
             ("Human Speed", $"{SimConfig.InitHumanSpeed:F2}", "MOVEMENT"),
             ("Infection Radius", $"{SimConfig.InitInfectionRadius:F2}", "INFECTION"),
@@ -543,10 +614,10 @@ class Program
             ("Rotten→Vanished", $"{SimConfig.InitRottenToVanishedChance:F6}", "TRANSITION"),
             ("Combat Radius", $"{SimConfig.InitCombatRadius:F2}", "COMBAT"),
             ("Survivor Kill Chance", $"{SimConfig.InitSurvivorKillChance:F2}", "COMBAT"),
-        };
+        ];
 
-        string lastCategory = "";
-        for (int i = 0; i < advancedItems.Length; i++)
+        var lastCategory = "";
+        for (var i = 0; i < advancedItems.Length; i++)
         {
             var item = advancedItems[i];
 
@@ -560,13 +631,13 @@ class Program
             }
 
             // 선택된 항목 하이라이트
-            bool isSelected = i == selectedIndex;
+            var isSelected = i == selectedIndex;
             if (isSelected)
             {
                 Raylib.DrawRectangle(textX - 5, currentY - 2, panelWidth - 40, 22, new Color(80, 60, 100, 255));
             }
 
-            Color textColor = isSelected ? Color.Yellow : Color.White;
+            var textColor = isSelected ? Color.Yellow : Color.White;
             Raylib.DrawText($"{item.name}", textX, currentY, 16, textColor);
             Raylib.DrawText($"{item.value}", textX + 210, currentY, 16, isSelected ? Color.Green : Color.LightGray);
 
@@ -584,12 +655,12 @@ class Program
         Raylib.DrawRectangle(textX - 5, currentY - 5, panelWidth - 40, 45, new Color(60, 40, 60, 200));
         Raylib.DrawText("[UP/DOWN] Select  [LEFT/RIGHT] Adjust", textX, currentY, 14, Color.LightGray);
         currentY += 18;
-        Raylib.DrawText("[ESC/BACKSPACE] Back to Basic Setup", textX, currentY, 14, Color.LightGray);
+        Raylib.DrawText("[ESC/Enter] Back to Basic Setup", textX, currentY, 14, Color.LightGray);
     }
 
-    static void AdjustAdvancedSetupValue(int index, bool increase, float multiplier)
+    private static void AdjustAdvancedSetupValue(int index, bool increase, float multiplier)
     {
-        float direction = increase ? 1f : -1f;
+        var direction = increase ? 1f : -1f;
 
         switch (index)
         {
@@ -638,27 +709,27 @@ class Program
         }
     }
 
-    static void AdjustSetupValue(int index, bool increase, int multiplier)
+    private static void AdjustSetupValue(int index, bool increase, float multiplier)
     {
-        int direction = increase ? 1 : -1;
+        var direction = increase ? 1f : -1f;
 
         switch (index)
         {
             case 0: // Population Count
-                SimConfig.PopulationCount = Math.Max(10, SimConfig.PopulationCount + direction * 100 * multiplier);
+                SimConfig.PopulationCount = Math.Max(10f, SimConfig.PopulationCount + direction * 100f * multiplier);
                 break;
             case 1: // Map Width
-                SimConfig.MapWidth = Math.Max(50, SimConfig.MapWidth + direction * 50 * multiplier);
+                SimConfig.MapWidth = Math.Max(50f, SimConfig.MapWidth + direction * 50f * multiplier);
                 break;
             case 2: // Map Height
-                SimConfig.MapHeight = Math.Max(50, SimConfig.MapHeight + direction * 50 * multiplier);
+                SimConfig.MapHeight = Math.Max(50f, SimConfig.MapHeight + direction * 50f * multiplier);
                 break;
         }
     }
 
-    static void AdjustEngineValue(SimEngine engine, int index, bool increase, float multiplier)
+    private static void AdjustEngineValue(SimEngine engine, int index, bool increase, float multiplier)
     {
-        float direction = increase ? 1f : -1f;
+        var direction = increase ? 1f : -1f;
 
         switch (index)
         {

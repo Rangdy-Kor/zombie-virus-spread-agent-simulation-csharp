@@ -2,11 +2,9 @@ namespace ZombieVirusSpreadAgentSimulation.Core;
 
 public class SimEngine
 {
-    public int MapWidth = SimConfig.MapWidth;
-    public int MapHeight = SimConfig.MapHeight;
-
     // 개체들을 메모리 효율이 좋은 배열로 관리
     public Agent[] Agents;
+    private readonly Dictionary<(int, int), List<int>> _grid = new();
 
     // 이동 속도 (수정 가능)
     public float ZombieSpeed;
@@ -31,7 +29,7 @@ public class SimEngine
     public float CombatRadius;                   // 전투 반경 (미터)
     public float SurvivorKillChance;            // 생존자의 좀비 처치 확률
     
-    public SimEngine(int populationCount)
+    public SimEngine(float populationCount)
     {
         // SimConfig의 고급 설정값 적용
         ZombieSpeed = SimConfig.InitZombieSpeed;
@@ -49,16 +47,16 @@ public class SimEngine
         CombatRadius = SimConfig.InitCombatRadius;
         SurvivorKillChance = SimConfig.InitSurvivorKillChance;
 
-        Agents = new Agent[populationCount];
+        Agents = new Agent[(int) populationCount];
         
         // 1. 모든 개체를 Civilian(민간인)으로 랜덤 위치에 배치
-        for (int i = 0; i < populationCount; i++)
+        for (var i = 0; i < populationCount; i++)
         {
             Agents[i] = new Agent
             {
                 Id = i,
-                X = (float)(Random.Shared.NextDouble() * MapWidth),
-                Y = (float)(Random.Shared.NextDouble() * MapHeight),
+                X = (float)(Random.Shared.NextDouble() * SimConfig.MapWidth),
+                Y = (float)(Random.Shared.NextDouble() * SimConfig.MapHeight),
                 Type = AgentType.Civilian,
                 AgeInTicks = 0,
                 IsActive = true
@@ -69,132 +67,153 @@ public class SimEngine
         Agents[0].Type = AgentType.Zombie;
     }
     
-    public void Update()
-    {
-        // 1. 이동 (병렬 처리)
-        Parallel.For(0, Agents.Length, i =>
-        {
-            if (!Agents[i].IsActive) return;
-            MoveAgent(ref Agents[i]);
-        });
+    private static readonly ParallelOptions ParallelOpts = new()
+    { 
+        // CPU 코어 수만큼만 스레드를 사용하도록 제한하여 20배속 중첩 오버헤드 방지
+        MaxDegreeOfParallelism = Environment.ProcessorCount 
+    };
 
-        // 2. 감염 및 전투 처리 (순차 처리 - 상태 변경이 있으므로)
-        for (int i = 0; i < Agents.Length; i++)
-        {
-            if (!Agents[i].IsActive) continue;
-            HandleOverlapAndInfection(ref Agents[i]);
-            HandleCombat(ref Agents[i]);
-        }
-
-        // 3. 시간 기반 상태 전이 (병렬 처리 가능)
-        Parallel.For(0, Agents.Length, i =>
-        {
-            if (!Agents[i].IsActive) return;
-            UpdateStateTransition(ref Agents[i]);
-        });
-    }
-    
     private void MoveAgent(ref Agent agent)
     {
         // 상태에 따른 속도 차등화
-        float speed = agent.Type == AgentType.Zombie ? ZombieSpeed : HumanSpeed;
+        var speed = agent.Type == AgentType.Zombie ? ZombieSpeed : HumanSpeed;
 
         // 사망했거나 소멸한 개체는 움직이지 않음
-        if (agent.Type == AgentType.DeadZombie || 
-            agent.Type == AgentType.RottenZombie || 
-            agent.Type == AgentType.Vanished) return;
+        if (agent.Type is AgentType.DeadZombie or AgentType.RottenZombie or AgentType.Vanished) return;
 
         // -1.0 ~ 1.0 사이의 무작위 방향으로 이동
-        float dx = (float)(Random.Shared.NextDouble() * 2 - 1) * speed;
-        float dy = (float)(Random.Shared.NextDouble() * 2 - 1) * speed;
+        var dx = (float)(Random.Shared.NextDouble() * 2 - 1) * speed;
+        var dy = (float)(Random.Shared.NextDouble() * 2 - 1) * speed;
 
         agent.X += dx;
         agent.Y += dy;
 
         // 맵 경계선을 벗어나지 않도록 제한 (Clamping)
         if (agent.X < 0) agent.X = 0;
-        if (agent.X > MapWidth) agent.X = MapWidth;
+        if (agent.X > SimConfig.MapWidth) agent.X = SimConfig.MapWidth;
         if (agent.Y < 0) agent.Y = 0;
-        if (agent.Y > MapHeight) agent.Y = MapHeight;
+        if (agent.Y > SimConfig.MapHeight) agent.Y = SimConfig.MapHeight;
     }
     
+    private void RebuildGrid()
+    {
+        // 셀 목록 재사용 (GC 압박 줄이기)
+        foreach (var list in _grid.Values) list.Clear();
+
+        for (var i = 0; i < Agents.Length; i++)
+        {
+            if (!Agents[i].IsActive) continue;
+
+            var cell = ToCell(Agents[i].X, Agents[i].Y);
+            if (!_grid.TryGetValue(cell, out var list))
+            {
+                list = new List<int>();
+                _grid[cell] = list;
+            }
+            list.Add(i);
+        }
+    }
+
+    // 좌표 → 셀 변환
+    private (int, int) ToCell(float x, float y)
+    {
+        return ((int)(x / InfectionRadius), (int)(y / InfectionRadius));
+    }
+    
+    // 주어진 위치 주변 3x3 셀의 에이전트 인덱스를 열거
+    private IEnumerable<int> GetNearbyIndices(float x, float y, int searchRange = 1)
+    {
+        var (cx, cy) = ToCell(x, y);
+        for (var dx = -searchRange; dx <= searchRange; dx++)
+        for (var dy = -searchRange; dy <= searchRange; dy++)
+        {
+            if (!_grid.TryGetValue((cx + dx, cy + dy), out var list)) continue;
+            foreach (var idx in list)
+                yield return idx;
+        }
+    }
+    
+    public void Update()
+    {
+        // 1. 이동 (병렬 처리)
+        Parallel.For(0, Agents.Length, ParallelOpts, i =>
+        {
+            if (!Agents[i].IsActive) return;
+            MoveAgent(ref Agents[i]);
+        });
+        
+        RebuildGrid();
+
+        // 2. 감염 및 전투 처리 (순차 처리 - 상태 변경이 있으므로)
+        for (var i = 0; i < Agents.Length; i++)
+        {
+            if (!Agents[i].IsActive) continue;
+            HandleOverlapAndInfection(ref Agents[i]);
+            HandleCombat(ref Agents[i]);
+        }
+        
+        // 3. 시간 기반 상태 전이 (병렬 처리 가능)
+        Parallel.For(0, Agents.Length, ParallelOpts, i =>
+        {
+            if (!Agents[i].IsActive) return;
+            UpdateStateTransition(ref Agents[i]);
+        });
+    }
+
     private void HandleOverlapAndInfection(ref Agent agent)
     {
         // 비감염군(민간인, 생존자)만 감염 대상
         if (agent.Type != AgentType.Civilian && agent.Type != AgentType.Survivor)
             return;
+        
+        var radiusSq = InfectionRadius * InfectionRadius;
 
-        float radiusSq = InfectionRadius * InfectionRadius;
-
-        for (int i = 0; i < Agents.Length; i++)
+        foreach (var i in GetNearbyIndices(agent.X, agent.Y))
         {
-            ref Agent other = ref Agents[i];
+            ref var other = ref Agents[i];
             if (!other.IsActive || other.Id == agent.Id) continue;
 
-            // 전파력이 있는 타입만 검사
-            bool isStrongInfector = other.Type == AgentType.Zombie || other.Type == AgentType.RottenZombie;
-            bool isWeakInfector = other.Type == AgentType.Carrier || other.Type == AgentType.DeadZombie;
-
+            var isStrongInfector = other.Type == AgentType.Zombie || other.Type == AgentType.RottenZombie;
+            var isWeakInfector = other.Type == AgentType.Carrier || other.Type == AgentType.DeadZombie;
             if (!isStrongInfector && !isWeakInfector) continue;
 
-            // 거리 계산
-            float dx = agent.X - other.X;
-            float dy = agent.Y - other.Y;
-            float distSq = dx * dx + dy * dy;
+            var dx = agent.X - other.X;
+            var dy = agent.Y - other.Y;
+            if (dx * dx + dy * dy > radiusSq) continue;
 
-            if (distSq > radiusSq) continue;
+            var infectionChance = isStrongInfector ? StrongInfectionChance : WeakInfectionChance;
+            if (Random.Shared.NextDouble() >= infectionChance) return;
 
-            // 감염 확률 계산
-            float infectionChance = isStrongInfector ? StrongInfectionChance : WeakInfectionChance;
-
-            if (Random.Shared.NextDouble() < infectionChance)
-            {
-                // 감염 발생! 20% 확률로 즉시 좀비, 80% 확률로 감염 상태
-                if (Random.Shared.NextDouble() < DirectZombieChance)
-                {
-                    agent.Type = AgentType.Zombie;
-                }
-                else
-                {
-                    agent.Type = agent.Type == AgentType.Civilian
-                        ? AgentType.InfectedCivilian
-                        : AgentType.InfectedSurvivor;
-                }
-                agent.AgeInTicks = 0; // 새 상태에서 틱 카운트 리셋
-                return; // 이미 감염됨, 더 이상 체크 불필요
-            }
+            agent.Type = Random.Shared.NextDouble() < DirectZombieChance
+                ? AgentType.Zombie
+                : (agent.Type == AgentType.Civilian ? AgentType.InfectedCivilian : AgentType.InfectedSurvivor);
+            agent.AgeInTicks = 0;
         }
     }
 
     private void HandleCombat(ref Agent agent)
     {
-        // 대좀비 전투력이 있는 자만 전투 가능 (생존자, 감염된 생존자)
         if (agent.Type != AgentType.Survivor && agent.Type != AgentType.InfectedSurvivor)
             return;
 
-        float radiusSq = CombatRadius * CombatRadius;
-
-        for (int i = 0; i < Agents.Length; i++)
+        var radiusSq = CombatRadius * CombatRadius;
+    
+        // 전투 반경을 셀 단위로 변환해서 검색 범위 결정
+        var searchRange = (int)(CombatRadius / InfectionRadius) + 1;
+    
+        foreach (var i in GetNearbyIndices(agent.X, agent.Y, searchRange))
         {
-            ref Agent other = ref Agents[i];
+            ref var other = ref Agents[i];
             if (!other.IsActive || other.Id == agent.Id) continue;
-
-            // 좀비만 처치 가능
             if (other.Type != AgentType.Zombie) continue;
 
-            // 거리 계산
-            float dx = agent.X - other.X;
-            float dy = agent.Y - other.Y;
-            float distSq = dx * dx + dy * dy;
+            var dx = agent.X - other.X;
+            var dy = agent.Y - other.Y;
+            if (dx * dx + dy * dy > radiusSq) continue;
 
-            if (distSq > radiusSq) continue;
-
-            // 처치 확률 계산
-            if (Random.Shared.NextDouble() < SurvivorKillChance)
-            {
-                other.Type = AgentType.DeadZombie;
-                other.AgeInTicks = 0;
-            }
+            if (Random.Shared.NextDouble() >= SurvivorKillChance) return;
+            other.Type = AgentType.DeadZombie;
+            other.AgeInTicks = 0;
         }
     }
     
@@ -266,6 +285,9 @@ public class SimEngine
             case AgentType.Vanished:
                 // 소멸한 개체는 어떠한 상호작용도 하지 않음
                 break;
+            
+            default:
+                return;
         }
     }
 }
