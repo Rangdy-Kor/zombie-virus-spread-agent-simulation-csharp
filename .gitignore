@@ -1,0 +1,55 @@
+# Rider 관련 폴더 및 설정 파일
+.idea/
+*.sln.DotSettings
+*.sln.dotsettings.user
+*.suo
+
+# Visual Studio 빌드 및 캐시 폴더
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# 빌드 출력 및 패키지
+*.nupkg
+*.nuspec
+project.lock.json
+project.assets.json
+*.nuget.props
+*.nuget.targets
+packages/
+
+# 사용자 개인 파일 (로컬 설정)
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# 백업 및 임시 파일
+*.bak
+*.tmp
+*.temp
+*.scc
+*.vssscc
+
+# 닷넷 프로파일링 및 유닛 테스트 결과
+*.DotCover
+TestResults/
+
+# OS 파일 (Mac/Windows 공통)
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
