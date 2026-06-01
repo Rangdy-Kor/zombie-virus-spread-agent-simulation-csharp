@@ -6,42 +6,76 @@ namespace ZombieVirusSpreadAgentSimulation.Systems;
 public class InfectionSystem(SpatialGrid? spatial)
 {
     public void HandleOverlapAndInfection(
-        ref Agent agent, 
-        float infectionRadius, 
-        double strongInfectionChance, 
-        double weakInfectionChance, 
+        Agent[] agents,
+        int agentIndex,
+        Action<int, AgentType> queueTypeChange,
+        float infectionRadius,
+        double strongInfectionChance,
+        double weakInfectionChance,
         double directZombieChance
     )
     {
-        var nearby = spatial?.FillNearbyBuffer(agent.X, agent.Y, infectionRadius);
+        ref var agent = ref agents[agentIndex];
         
-        // 비감염군(민간인, 생존자)만 감염 대상
-        if (agent.Type != AgentType.Civilian && agent.Type != AgentType.Survivor)
+        // 감염원만 처리
+        if (agent.Type != AgentType.Civilian && agent.Type != AgentType.Survivor) return;
+
+        if (!agent.IsActive)
             return;
 
-        var radiusSq = infectionRadius * infectionRadius;
-
-        spatial?.FillNearbyBuffer(agent.X, agent.Y, infectionRadius);
+        var nearby = spatial?.FillNearbyBuffer(
+            agent.X,
+            agent.Y,
+            infectionRadius
+        );
+        
         if (nearby == null) return;
-        foreach (var unused in nearby)
+        
+        var radiusSq = infectionRadius * infectionRadius;
+        
+        foreach (var otherIndex in nearby.Where(otherIndex => otherIndex != agentIndex))
         {
-            if (!agent.IsActive) continue;
+            ref var other = ref agents[otherIndex];
 
-            var isStrongInfector = agent.Type is AgentType.Zombie or AgentType.RottenZombie;
-            var isWeakInfector = agent.Type is AgentType.Carrier or AgentType.DeadZombie;
-            if (!isStrongInfector && !isWeakInfector) continue;
+            if (!other.IsActive) continue;
 
-            var dx = agent.X - agent.X;
-            var dy = agent.Y - agent.Y;
-            if (dx * dx + dy * dy > radiusSq) continue;
+            // 주변 감염원 판정
+            var isStrongInfector = other.Type is AgentType.Zombie or AgentType.RottenZombie;
 
-            var infectionChance = isStrongInfector ? strongInfectionChance : weakInfectionChance;
-            if (Random.Shared.NextDouble() >= infectionChance) continue;
+            var isWeakInfector = other.Type is AgentType.Carrier or AgentType.DeadZombie;
+            
+            if (!isStrongInfector && !isWeakInfector)
+                continue;
 
-            agent.Type = Random.Shared.NextDouble() < directZombieChance
-                ? AgentType.Zombie
-                : (agent.Type == AgentType.Civilian ? AgentType.InfectedCivilian : AgentType.InfectedSurvivor);
-            agent.AgeInTicks = 0;
+            // 실제 거리 계산
+            var dx = agent.X - other.X;
+            var dy = agent.Y - other.Y;
+
+            var distSq = dx * dx + dy * dy;
+
+            if (distSq > radiusSq)
+                continue;
+
+            var infectionChance =
+                isStrongInfector
+                    ? strongInfectionChance
+                    : weakInfectionChance;
+
+            if (Random.Shared.NextDouble() >= infectionChance)
+                continue;
+            
+            var newType =
+                Random.Shared.NextDouble() < directZombieChance
+                    ? AgentType.Zombie
+                    : (agent.Type == AgentType.Civilian
+                        ? AgentType.InfectedCivilian
+                        : AgentType.InfectedSurvivor);
+
+            // 감염 발생
+            queueTypeChange(agentIndex, newType);
+
+            // 한 번 감염되면 종료
+            break;
         }
     }
 }

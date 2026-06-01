@@ -7,6 +7,7 @@ public class SimEngine
 {
     // 개체들을 메모리 효율이 좋은 배열로 관리
     public Agent[] Agents;
+    private readonly Dictionary<int, PendingTypeChange> _pendingChanges = [];
     private readonly SpatialGrid _spatial;
     private readonly InfectionSystem _infection;
     private readonly MovementSystem _movement;
@@ -101,20 +102,25 @@ public class SimEngine
         // 2. 감염 및 전투 처리 (순차 처리 - 상태 변경이 있으므로)
         for (var i = 0; i < Agents.Length; i++)
         {
-            if (!Agents[i].IsActive) continue;
-            _infection?.HandleOverlapAndInfection(
-                ref Agents[i], 
-                InfectionRadius, 
-                StrongInfectionChance, 
-                WeakInfectionChance, 
+            _infection.HandleOverlapAndInfection(
+                Agents,
+                i,
+                QueueTypeChange,
+                InfectionRadius,
+                StrongInfectionChance,
+                WeakInfectionChance,
                 DirectZombieChance
             );
             _combat?.HandleCombat(
-                ref Agents[i], 
+                Agents, 
+                i,
+                QueueTypeChange,
                 InfectionRadius, 
                 CombatRadius, 
                 SurvivorKillChance
             );
+            
+            ApplyPendingChanges();
         }
         
         // 3. 시간 기반 상태 전이 (병렬 처리 가능)
@@ -131,6 +137,34 @@ public class SimEngine
                 RottenToVanishedChance
             );
         });
+    }
+    
+    private void ApplyPendingChanges()
+    {
+        foreach (var (agentIndex, change)
+                 in _pendingChanges)
+        {
+            ref var agent = ref Agents[agentIndex];
+
+            agent.Type = change.NewType;
+            agent.AgeInTicks = change.NewAgeInTicks;    
+        }
+
+        _pendingChanges.Clear();
+    }
+    
+    private void QueueTypeChange(
+        int agentIndex,
+        AgentType newType)
+    {
+        if (_pendingChanges.TryGetValue(agentIndex, out var existing))
+        {
+            // 이미 DeadZombie면 덮어쓰기 금지
+            if (existing.NewType == AgentType.DeadZombie)
+                return;
+        }
+
+        _pendingChanges[agentIndex] = new PendingTypeChange(newType);
     }
     
     public readonly struct EditSnapshot(SimEngine e)

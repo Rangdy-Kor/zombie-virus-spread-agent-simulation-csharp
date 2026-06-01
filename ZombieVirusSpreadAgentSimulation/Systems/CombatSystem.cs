@@ -6,36 +6,63 @@ namespace ZombieVirusSpreadAgentSimulation.Systems;
 public class CombatSystem(SpatialGrid? spatial)
 {
     public void HandleCombat(
-        ref Agent agent, 
+        Agent[] agents,
+        int agentIndex,
+        Action<int, AgentType> queueTypeChange,
         float infectionRadius, 
         float combatRadius,
         double survivorKillChance
     )
     {
-        var nearby = spatial?.FillNearbyBuffer(agent.X, agent.Y, infectionRadius);
+        ref var agent = ref agents[agentIndex];
         
-        if (agent.Type != AgentType.Survivor && agent.Type != AgentType.InfectedSurvivor)
+        // 전투 대상만 처리
+        if (agent.Type != AgentType.Survivor && agent.Type != AgentType.InfectedSurvivor) return;
+
+        if (!agent.IsActive)
             return;
+        
+        var nearby = spatial?.FillNearbyBuffer(
+            agent.X,
+            agent.Y,
+            infectionRadius
+        );
+        
+        if (nearby == null) return;
 
         var radiusSq = combatRadius * combatRadius;
     
-        // 전투 반경을 셀 단위로 변환해서 검색 범위 결정
-        var searchRange = (int)(combatRadius / infectionRadius) + 1;
-        
-        spatial?.FillNearbyBuffer(agent.X, agent.Y, infectionRadius, searchRange);
-        if (nearby == null) return;
-        foreach (var unused in nearby)
+        foreach (var otherIndex in nearby.Where(otherIndex => otherIndex != agentIndex))
         {
-            if (!agent.IsActive) continue;
-            if (agent.Type != AgentType.Zombie) continue;
+            ref var other = ref agents[otherIndex];
 
-            var dx = agent.X - agent.X;
-            var dy = agent.Y - agent.Y;
-            if (dx * dx + dy * dy > radiusSq) continue;
+            if (!other.IsActive) continue;
 
-            if (Random.Shared.NextDouble() >= survivorKillChance) continue;
-            agent.Type = AgentType.DeadZombie;
-            agent.AgeInTicks = 0;
+            // 좀비만 대상
+            if (other.Type is not (AgentType.Zombie or AgentType.RottenZombie))
+                continue;
+
+            // 실제 거리 계산
+            var dx = agent.X - other.X;
+            var dy = agent.Y - other.Y;
+
+            var distSq = dx * dx + dy * dy;
+
+            if (distSq > radiusSq) continue;
+
+            // 공격 성공
+            if (Random.Shared.NextDouble()
+                >= survivorKillChance)
+                continue;
+
+            // 좀비 사망 예약
+            queueTypeChange(
+                otherIndex,
+                AgentType.DeadZombie
+            );
+            
+            // 한 번 공격하면 종료
+            break;
         }
     }
 }
