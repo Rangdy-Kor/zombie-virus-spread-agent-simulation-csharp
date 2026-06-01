@@ -253,11 +253,9 @@ internal static class Program
         }
         
         // 프로그램 종료 시 백그라운드 스레드도 함께 안전하게 종료
-        await cts.CancelAsync();
-    
-        await calculationTask; 
-    
         Raylib.CloseWindow();
+        await cts.CancelAsync();
+        await calculationTask; 
     }
 
     private static void DrawSimulationView(Agent[] agents, int x, int y, int width, int height)
