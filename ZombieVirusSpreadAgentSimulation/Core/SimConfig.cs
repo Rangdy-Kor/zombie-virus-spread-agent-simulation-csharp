@@ -48,24 +48,24 @@ public static class SimConfig
     // === 고급 설정 (SimEngine 초기값) ===
 
     // 이동 속도
-    public static float InitZombieSpeed { get; set; } = 1.7f;
-    public static float InitHumanSpeed { get; set; } = 1.0f;
+    public static float InitZombieSpeed { get; set; } = 1.5f;                       // 좀비 이동 속도
+    public static float InitHumanSpeed { get; set; } = 1.0f;                        // 인간 이동 속도
 
     // 감염 관련
-    public static float InitInfectionRadius { get; set; } = 2.0f;
-    public static float InitStrongInfectionChance { get; set; } = 0.08f;
-    public static float InitWeakInfectionChance { get; set; } = 0.05f;
-    public static float InitDirectZombieChance { get; set; } = 0.20f;
+    public static float InitInfectionRadius { get; set; } = 2.0f;                   // 감염 반경 (미터)
+    public static float InitStrongInfectionChance { get; set; } = 0.07f;            // 강한 감염 확률 (좀비 / 부패)
+    public static float InitWeakInfectionChance { get; set; } = 0.05f;              // 약한 감염 확률 (보균자 / 사망)
+    public static float InitDirectZombieChance { get; set; } = 0.25f;               // 직접 좀비화 확률
 
     // 상태 전이
-    public static float InitCivilianToSurvivorChance { get; set; } = 0.00006f;
-    public static float InitInfectedToCarrierChance { get; set; } = 0.005f;
-    public static float InitCarrierToZombieChance { get; set; } = 0.007f;
-    public static float InitZombieToRottenChance { get; set; } = 0.00008f;
-    public static float InitDeadToRottenChance { get; set; } = 0.0008f;
-    public static float InitRottenToVanishedChance { get; set; } = 0.0001f;
+    public static float InitCivilianToSurvivorChance { get; set; } = 0.00005f;      // 민간인 → 생존자 전이 확률
+    public static float InitInfectedToCarrierChance { get; set; } = 0.002f;         // 감염자 → 보균자 전이 확률
+    public static float InitCarrierToZombieChance { get; set; } = 0.004f;           // 보균자 → 좀비 전이 확률
+    public static float InitZombieToRottenChance { get; set; } = 0.00005f;          // 좀비 → 부패 전이 확률
+    public static float InitDeadToRottenChance { get; set; } = 0.0005f;             // 죽은 좀비 → 부패 전이 확률
+    public static float InitRottenToVanishedChance { get; set; } = 0.0002f;         // 부패 → 소멸 전이 확률
 
     // 전투 관련
-    public static float InitCombatRadius { get; set; } = 2.5f;
-    public static float InitSurvivorKillChance { get; set; } = 0.20f;
+    public static float InitCombatRadius { get; set; } = 2.5f;                        // 전투 반경 (미터)
+    public static float InitSurvivorKillChance { get; set; } = 0.17f;               // 생존자 좀비 처치 확률
 }
