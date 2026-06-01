@@ -1,3 +1,5 @@
+using JetBrains.Annotations;
+
 namespace ZombieVirusSpreadAgentSimulation.Core;
 
 public enum AgentType
@@ -13,6 +15,6 @@ public struct Agent
     public float X;
     public float Y;
     public AgentType Type;
-    public int AgeInTicks;
+    [UsedImplicitly] public int AgeInTicks;
     public bool IsActive;
 }

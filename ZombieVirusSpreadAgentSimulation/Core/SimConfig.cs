@@ -4,9 +4,9 @@ public static class SimConfig
 {
     // 시뮬레이션 설정 (수정 가능)
     public const int MaxTicksPerSecond = 20;
-    public static float PopulationCount = 1000;     // 인구 수
-    public static float MapWidth = 500f;             // 맵 가로 크기 (미터)
-    public static float MapHeight = 500f;            // 맵 세로 크기 (미터)
+    public static int PopulationCount { get; set; } = 1000;     // 인구 
+    public static float MapWidth { get; set; } = 500f;             // 맵 가로 크기 (미터)
+    public static float MapHeight { get; set; } = 500f;            // 맵 세로 크기 (미터)
 
     // 화면 설정
     public const int ScreenWidth = 1200;          // 창 가로 크기
@@ -19,7 +19,7 @@ public static class SimConfig
     public static (int width, int height) CalculateSimViewSize()
     {
         var mapAspect = MapWidth / MapHeight;
-        const float maxAspect = (float)MaxSimViewWidth / MaxSimViewHeight;
+        const float maxAspect = MaxSimViewWidth / (float)MaxSimViewHeight;
 
         int viewWidth, viewHeight;
 
@@ -48,24 +48,24 @@ public static class SimConfig
     // === 고급 설정 (SimEngine 초기값) ===
 
     // 이동 속도
-    public static float InitZombieSpeed = 1.7f;
-    public static float InitHumanSpeed = 1.0f;
+    public static float InitZombieSpeed { get; set; } = 1.7f;
+    public static float InitHumanSpeed { get; set; } = 1.0f;
 
     // 감염 관련
-    public static float InitInfectionRadius = 2.0f;
-    public static float InitStrongInfectionChance = 0.08f;
-    public static float InitWeakInfectionChance = 0.05f;
-    public static float InitDirectZombieChance = 0.20f;
+    public static float InitInfectionRadius { get; set; } = 2.0f;
+    public static float InitStrongInfectionChance { get; set; } = 0.08f;
+    public static float InitWeakInfectionChance { get; set; } = 0.05f;
+    public static float InitDirectZombieChance { get; set; } = 0.20f;
 
     // 상태 전이
-    public static float InitCivilianToSurvivorChance = 0.00006f;
-    public static float InitInfectedToCarrierChance = 0.005f;
-    public static float InitCarrierToZombieChance = 0.007f;
-    public static float InitZombieToRottenChance = 0.00008f;
-    public static float InitDeadToRottenChance = 0.0008f;
-    public static float InitRottenToVanishedChance = 0.0001f;
+    public static float InitCivilianToSurvivorChance { get; set; } = 0.00006f;
+    public static float InitInfectedToCarrierChance { get; set; } = 0.005f;
+    public static float InitCarrierToZombieChance { get; set; } = 0.007f;
+    public static float InitZombieToRottenChance { get; set; } = 0.00008f;
+    public static float InitDeadToRottenChance { get; set; } = 0.0008f;
+    public static float InitRottenToVanishedChance { get; set; } = 0.0001f;
 
     // 전투 관련
-    public static float InitCombatRadius = 2.5f;
-    public static float InitSurvivorKillChance = 0.20f;
+    public static float InitCombatRadius { get; set; } = 2.5f;
+    public static float InitSurvivorKillChance { get; set; } = 0.20f;
 }

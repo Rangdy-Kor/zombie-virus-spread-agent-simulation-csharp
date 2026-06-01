@@ -5,20 +5,22 @@ namespace ZombieVirusSpreadAgentSimulation.SimulationApp;
 
 internal static class Program
 {
-    private static readonly Lock SimLock = new Lock();
+    private static readonly Lock SimLock = new();
+    private static Agent[]? _renderBuffer;
+    private static readonly Dictionary<AgentType, int> StatsBuffer = new();
+    private static readonly AgentType[] AllAgentTypes = Enum.GetValues<AgentType>();
     
     private static volatile bool _isPaused;
     private static volatile SimEngine? _engine;
+    
+    private static volatile int _simulationSpeed = SimConfig.TicksPerFrame;
+    private static int _tickCount;
 
-    private static void Main()
+    private static async Task Main()
     {
         // Raylib 초기화
         Raylib.InitWindow(SimConfig.ScreenWidth, SimConfig.ScreenHeight, "Zombie Virus Spread Agent Simulation");
         Raylib.SetTargetFPS(SimConfig.TargetFps);
-
-        // 통계 변수
-        var tickCount = 0;
-        var simulationSpeed = SimConfig.TicksPerFrame;
 
         // 모드 변수
         var isSetupMode = true;  // 시작 시 설정 모드로 시작
@@ -42,8 +44,7 @@ internal static class Program
                 var localEngine = _engine;
                 if (!_isPaused && localEngine != null)
                 {
-                    // ReSharper disable once AccessToModifiedClosure
-                    var msPerTick = 1000.0 / (SimConfig.MaxTicksPerSecond * simulationSpeed);
+                    var msPerTick = 1000.0 / (SimConfig.MaxTicksPerSecond * _simulationSpeed);
                     var waitTime = nextTickTime - stopwatch.Elapsed.TotalMilliseconds;
 
                     switch (waitTime)
@@ -59,8 +60,7 @@ internal static class Program
                             lock (SimLock)
                             {
                                 localEngine.Update();
-                                // ReSharper disable once AccessToModifiedClosure
-                                tickCount++;
+                                _tickCount++;
                             }
                             nextTickTime += msPerTick;
 
@@ -150,7 +150,7 @@ internal static class Program
                 {
                     // 시뮬레이션 시작
                     _engine = new SimEngine(SimConfig.PopulationCount);
-                    tickCount = 0;
+                    _tickCount = 0;
                     _isPaused = false;
                     isSetupMode = false;
                 }
@@ -201,8 +201,8 @@ internal static class Program
             {
                 // 일반 모드 입력 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Space)) _isPaused = !_isPaused;
-                if (Raylib.IsKeyPressed(KeyboardKey.Up)) simulationSpeed = Math.Min(simulationSpeed + 1, 20);
-                if (Raylib.IsKeyPressed(KeyboardKey.Down)) simulationSpeed = Math.Max(simulationSpeed - 1, 1);
+                if (Raylib.IsKeyPressed(KeyboardKey.Up)) _simulationSpeed = Math.Min(_simulationSpeed + 1, 20);
+                if (Raylib.IsKeyPressed(KeyboardKey.Down)) _simulationSpeed = Math.Max(_simulationSpeed - 1, 1);
                 if (Raylib.IsKeyPressed(KeyboardKey.F2) || Raylib.IsKeyPressed(KeyboardKey.Escape))
                 {
                     // F2, Esc키 누르면 설정 모드로 돌아감
@@ -213,18 +213,30 @@ internal static class Program
 
             // 통계 계산
             Agent[]? snapshot = null;
+            SimEngine.EditSnapshot? editSnapshot = null;
             lock (SimLock)
             {
                 var localEngine = _engine;
                 if (localEngine != null)
-                    snapshot = localEngine.Agents.ToArray();
+                {
+                    // 버퍼 크기가 다를 때만 새로 할당
+                    if (_renderBuffer == null || _renderBuffer.Length != localEngine.Agents.Length)
+                        _renderBuffer = new Agent[localEngine.Agents.Length];
+        
+                    Array.Copy(localEngine.Agents, _renderBuffer, localEngine.Agents.Length);
+                    snapshot = _renderBuffer; 
+                    if (isEditMode)
+                        editSnapshot = localEngine.TakeEditSnapshot();
+                }
             }
+
 
             var stats = snapshot != null
                 ? CalculateStats(snapshot)
-                : new Dictionary<AgentType, int>();
+                : StatsBuffer;
 
             Raylib.BeginDrawing();
+            
             Raylib.ClearBackground(new Color(20, 20, 30, 255));
 
             var (simViewWidth, simViewHeight) = SimConfig.CalculateSimViewSize();
@@ -232,23 +244,19 @@ internal static class Program
             if (snapshot != null)
             {
                 DrawSimulationView(snapshot, 10, 10, simViewWidth, simViewHeight);
-                DrawUiPanel(stats, tickCount, _isPaused, simulationSpeed, simViewWidth + 30, 10, isEditMode);
-                if (isEditMode)
-                {
-                    var localEngine = _engine;
-                    if (localEngine != null)
-                        DrawEditPanel(localEngine, editSelectedIndex);
-                }
+                DrawUiPanel(stats, _tickCount, _isPaused, _simulationSpeed, simViewWidth + 30, 10, isEditMode);
+                if (isEditMode && editSnapshot.HasValue)
+                    DrawEditPanel(editSnapshot.Value, editSelectedIndex);
             }
 
             Raylib.EndDrawing();
         }
         
         // 프로그램 종료 시 백그라운드 스레드도 함께 안전하게 종료
-        cts.Cancel();
-        // ReSharper disable once MethodSupportsCancellation
-        calculationTask.Wait();
-        
+        await cts.CancelAsync();
+    
+        await calculationTask; 
+    
         Raylib.CloseWindow();
     }
 
@@ -265,7 +273,7 @@ internal static class Program
         const int dotSize = SimConfig.AgentDotSize;
         for (var i = 0; i < agents.Length; i++)
         {
-            ref Agent agent = ref agents[i];
+            ref var agent = ref agents[i];
             if (!agent.IsActive) continue;
 
             var px = x + (int)(agent.X * scaleX);
@@ -371,21 +379,16 @@ internal static class Program
 
     private static Dictionary<AgentType, int> CalculateStats(Agent[] agents)
     {
-        var stats = new Dictionary<AgentType, int>();
-        foreach (var type in Enum.GetValues<AgentType>())
-        {
-            stats[type] = 0;
-        }
+        foreach (var type in AllAgentTypes)
+            StatsBuffer[type] = 0;
 
         for (var i = 0; i < agents.Length; i++)
-        {
-            stats[agents[i].Type]++;
-        }
+            StatsBuffer[agents[i].Type]++;
 
-        return stats;
+        return StatsBuffer;
     }
 
-    private static void DrawEditPanel(SimEngine engine, int selectedIndex)
+    private static void DrawEditPanel(SimEngine.EditSnapshot snapshot, int selectedIndex)
     {
         // 반투명 배경
         const int panelWidth = 450;
@@ -407,20 +410,20 @@ internal static class Program
         // 편집 항목들
         var editItems = new (string name, string value, string category)[]
         {
-            ("Zombie Speed", $"{engine.ZombieSpeed:F2}", "MOVEMENT"),
-            ("Human Speed", $"{engine.HumanSpeed:F2}", "MOVEMENT"),
-            ("Infection Radius", $"{engine.InfectionRadius:F2}", "INFECTION"),
-            ("Strong Infect Chance", $"{engine.StrongInfectionChance:F4}", "INFECTION"),
-            ("Weak Infect Chance", $"{engine.WeakInfectionChance:F4}", "INFECTION"),
-            ("Direct Zombie Chance", $"{engine.DirectZombieChance:F2}", "INFECTION"),
-            ("Civilian→Survivor", $"{engine.CivilianToSurvivorChance:F6}", "TRANSITION"),
-            ("Infected→Carrier", $"{engine.InfectedToCarrierChance:F4}", "TRANSITION"),
-            ("Carrier→Zombie", $"{engine.CarrierToZombieChance:F4}", "TRANSITION"),
-            ("Zombie→Rotten", $"{engine.ZombieToRottenChance:F6}", "TRANSITION"),
-            ("Dead→Rotten", $"{engine.DeadToRottenChance:F4}", "TRANSITION"),
-            ("Rotten→Vanished", $"{engine.RottenToVanishedChance:F6}", "TRANSITION"),
-            ("Combat Radius", $"{engine.CombatRadius:F2}", "COMBAT"),
-            ("Survivor Kill Chance", $"{engine.SurvivorKillChance:F2}", "COMBAT"),
+            ("Zombie Speed", $"{snapshot.ZombieSpeed:F2}", "MOVEMENT"),
+            ("Human Speed", $"{snapshot.HumanSpeed:F2}", "MOVEMENT"),
+            ("Infection Radius", $"{snapshot.InfectionRadius:F2}", "INFECTION"),
+            ("Strong Infect Chance", $"{snapshot.StrongInfectionChance:F4}", "INFECTION"),
+            ("Weak Infect Chance", $"{snapshot.WeakInfectionChance:F4}", "INFECTION"),
+            ("Direct Zombie Chance", $"{snapshot.DirectZombieChance:F2}", "INFECTION"),
+            ("Civilian→Survivor", $"{snapshot.CivilianToSurvivorChance:F6}", "TRANSITION"),
+            ("Infected→Carrier", $"{snapshot.InfectedToCarrierChance:F4}", "TRANSITION"),
+            ("Carrier→Zombie", $"{snapshot.CarrierToZombieChance:F4}", "TRANSITION"),
+            ("Zombie→Rotten", $"{snapshot.ZombieToRottenChance:F6}", "TRANSITION"),
+            ("Dead→Rotten", $"{snapshot.DeadToRottenChance:F4}", "TRANSITION"),
+            ("Rotten→Vanished", $"{snapshot.RottenToVanishedChance:F6}", "TRANSITION"),
+            ("Combat Radius", $"{snapshot.CombatRadius:F2}", "COMBAT"),
+            ("Survivor Kill Chance", $"{snapshot.SurvivorKillChance:F2}", "COMBAT"),
         };
 
         var lastCategory = "";
@@ -716,7 +719,7 @@ internal static class Program
         switch (index)
         {
             case 0: // Population Count
-                SimConfig.PopulationCount = Math.Max(10f, SimConfig.PopulationCount + direction * 100f * multiplier);
+                SimConfig.PopulationCount = Math.Max(10, SimConfig.PopulationCount + (int)(direction * 100f * multiplier));
                 break;
             case 1: // Map Width
                 SimConfig.MapWidth = Math.Max(50f, SimConfig.MapWidth + direction * 50f * multiplier);

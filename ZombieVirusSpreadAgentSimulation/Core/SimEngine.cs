@@ -5,6 +5,8 @@ public class SimEngine
     // 개체들을 메모리 효율이 좋은 배열로 관리
     public Agent[] Agents;
     private readonly Dictionary<(int, int), List<int>> _grid = new();
+    private readonly List<(int, int)> _activeCells = []; // 이번 틱에 사용된 셀만 추적
+    private readonly List<int> _nearbyBuffer = new();
 
     // 이동 속도 (수정 가능)
     public float ZombieSpeed;
@@ -29,7 +31,7 @@ public class SimEngine
     public float CombatRadius;                   // 전투 반경 (미터)
     public float SurvivorKillChance;            // 생존자의 좀비 처치 확률
     
-    public SimEngine(float populationCount)
+    public SimEngine(int populationCount)
     {
         // SimConfig의 고급 설정값 적용
         ZombieSpeed = SimConfig.InitZombieSpeed;
@@ -47,7 +49,7 @@ public class SimEngine
         CombatRadius = SimConfig.InitCombatRadius;
         SurvivorKillChance = SimConfig.InitSurvivorKillChance;
 
-        Agents = new Agent[(int) populationCount];
+        Agents = new Agent[populationCount];
         
         // 1. 모든 개체를 Civilian(민간인)으로 랜덤 위치에 배치
         for (var i = 0; i < populationCount; i++)
@@ -75,11 +77,11 @@ public class SimEngine
 
     private void MoveAgent(ref Agent agent)
     {
-        // 상태에 따른 속도 차등화
-        var speed = agent.Type == AgentType.Zombie ? ZombieSpeed : HumanSpeed;
-
         // 사망했거나 소멸한 개체는 움직이지 않음
         if (agent.Type is AgentType.DeadZombie or AgentType.RottenZombie or AgentType.Vanished) return;
+        
+        // 상태에 따른 속도 차등화
+        var speed = agent.Type == AgentType.Zombie ? ZombieSpeed : HumanSpeed;
 
         // -1.0 ~ 1.0 사이의 무작위 방향으로 이동
         var dx = (float)(Random.Shared.NextDouble() * 2 - 1) * speed;
@@ -97,8 +99,9 @@ public class SimEngine
     
     private void RebuildGrid()
     {
-        // 셀 목록 재사용 (GC 압박 줄이기)
-        foreach (var list in _grid.Values) list.Clear();
+        foreach (var cell in _activeCells)
+            _grid[cell].Clear();
+        _activeCells.Clear();
 
         for (var i = 0; i < Agents.Length; i++)
         {
@@ -109,7 +112,9 @@ public class SimEngine
             {
                 list = new List<int>();
                 _grid[cell] = list;
+                _activeCells.Add(cell);
             }
+            else if (list.Count == 0) _activeCells.Add(cell);
             list.Add(i);
         }
     }
@@ -121,15 +126,16 @@ public class SimEngine
     }
     
     // 주어진 위치 주변 3x3 셀의 에이전트 인덱스를 열거
-    private IEnumerable<int> GetNearbyIndices(float x, float y, int searchRange = 1)
+    private void FillNearbyBuffer(float x, float y, int searchRange = 1)
     {
+        _nearbyBuffer.Clear();
         var (cx, cy) = ToCell(x, y);
         for (var dx = -searchRange; dx <= searchRange; dx++)
         for (var dy = -searchRange; dy <= searchRange; dy++)
         {
             if (!_grid.TryGetValue((cx + dx, cy + dy), out var list)) continue;
             foreach (var idx in list)
-                yield return idx;
+                _nearbyBuffer.Add(idx);
         }
     }
     
@@ -167,14 +173,15 @@ public class SimEngine
             return;
         
         var radiusSq = InfectionRadius * InfectionRadius;
-
-        foreach (var i in GetNearbyIndices(agent.X, agent.Y))
+        
+        FillNearbyBuffer(agent.X, agent.Y);
+        foreach (var i in _nearbyBuffer)
         {
             ref var other = ref Agents[i];
             if (!other.IsActive || other.Id == agent.Id) continue;
 
-            var isStrongInfector = other.Type == AgentType.Zombie || other.Type == AgentType.RottenZombie;
-            var isWeakInfector = other.Type == AgentType.Carrier || other.Type == AgentType.DeadZombie;
+            var isStrongInfector = other.Type is AgentType.Zombie or AgentType.RottenZombie;
+            var isWeakInfector = other.Type is AgentType.Carrier or AgentType.DeadZombie;
             if (!isStrongInfector && !isWeakInfector) continue;
 
             var dx = agent.X - other.X;
@@ -182,7 +189,7 @@ public class SimEngine
             if (dx * dx + dy * dy > radiusSq) continue;
 
             var infectionChance = isStrongInfector ? StrongInfectionChance : WeakInfectionChance;
-            if (Random.Shared.NextDouble() >= infectionChance) return;
+            if (Random.Shared.NextDouble() >= infectionChance) continue;
 
             agent.Type = Random.Shared.NextDouble() < DirectZombieChance
                 ? AgentType.Zombie
@@ -200,8 +207,9 @@ public class SimEngine
     
         // 전투 반경을 셀 단위로 변환해서 검색 범위 결정
         var searchRange = (int)(CombatRadius / InfectionRadius) + 1;
-    
-        foreach (var i in GetNearbyIndices(agent.X, agent.Y, searchRange))
+        
+        FillNearbyBuffer(agent.X, agent.Y, searchRange);
+        foreach (var i in _nearbyBuffer)
         {
             ref var other = ref Agents[i];
             if (!other.IsActive || other.Id == agent.Id) continue;
@@ -211,7 +219,7 @@ public class SimEngine
             var dy = agent.Y - other.Y;
             if (dx * dx + dy * dy > radiusSq) continue;
 
-            if (Random.Shared.NextDouble() >= SurvivorKillChance) return;
+            if (Random.Shared.NextDouble() >= SurvivorKillChance) continue;
             other.Type = AgentType.DeadZombie;
             other.AgeInTicks = 0;
         }
@@ -290,4 +298,15 @@ public class SimEngine
                 return;
         }
     }
-}
+
+    public readonly struct EditSnapshot(SimEngine e)
+    {
+        public readonly float ZombieSpeed = e.ZombieSpeed, HumanSpeed = e.HumanSpeed, InfectionRadius = e.InfectionRadius;
+        public readonly float StrongInfectionChance = e.StrongInfectionChance, WeakInfectionChance = e.WeakInfectionChance, DirectZombieChance = e.DirectZombieChance;
+        public readonly float CivilianToSurvivorChance = e.CivilianToSurvivorChance, InfectedToCarrierChance = e.InfectedToCarrierChance, CarrierToZombieChance = e.CarrierToZombieChance;
+        public readonly float ZombieToRottenChance = e.ZombieToRottenChance, DeadToRottenChance = e.DeadToRottenChance, RottenToVanishedChance = e.RottenToVanishedChance;
+        public readonly float CombatRadius = e.CombatRadius, SurvivorKillChance = e.SurvivorKillChance;
+    }
+
+    public EditSnapshot TakeEditSnapshot() => new(this);
+}   
