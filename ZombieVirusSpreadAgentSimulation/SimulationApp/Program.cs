@@ -728,7 +728,10 @@ internal static class Program
         }
     }
 
-    private static void AdjustEngineValue(SimEngine engine, int index, bool increase, float multiplier)
+    private static void AdjustEngineValue(
+        SimEngine engine,
+        int index, bool increase, float multiplier
+    )
     {
         var direction = increase ? 1f : -1f;
 
