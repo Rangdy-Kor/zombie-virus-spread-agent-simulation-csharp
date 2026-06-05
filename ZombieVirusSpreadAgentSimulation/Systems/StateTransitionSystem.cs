@@ -5,8 +5,6 @@ namespace ZombieVirusSpreadAgentSimulation.Systems;
 
 public class StateTransitionSystem
 {
-    
-    [SuppressMessage("Performance", "CA1822:멤버를 static으로 표시하세요.")]
     public void UpdateStateTransition(
         ref Agent agent, 
         float civilianToSurvivorChance,
@@ -14,8 +12,7 @@ public class StateTransitionSystem
         float carrierToZombieChance, 
         float zombieToRottenChance, 
         float deadToRottenChance,
-        float rottenToVanishedChance
-        )
+        float rottenToVanishedChance)
     {
         agent.AgeInTicks++;
 

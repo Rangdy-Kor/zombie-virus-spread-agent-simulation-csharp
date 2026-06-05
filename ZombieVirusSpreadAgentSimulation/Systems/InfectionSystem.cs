@@ -3,8 +3,10 @@ using ZombieVirusSpreadAgentSimulation.Spatial;
 
 namespace ZombieVirusSpreadAgentSimulation.Systems;
 
-public class InfectionSystem(SpatialGrid? spatial)
+public class InfectionSystem(SpatialGrid spatial)
 {
+    private readonly List<int> _buffer = [];
+    
     public void HandleOverlapAndInfection(
         Agent[] agents,
         int agentIndex,
@@ -12,8 +14,7 @@ public class InfectionSystem(SpatialGrid? spatial)
         float infectionRadius,
         double strongInfectionChance,
         double weakInfectionChance,
-        double directZombieChance
-    )
+        double directZombieChance)
     {
         ref var agent = ref agents[agentIndex];
         
@@ -23,18 +24,15 @@ public class InfectionSystem(SpatialGrid? spatial)
         if (!agent.IsActive)
             return;
 
-        var nearby = spatial?.FillNearbyBuffer(
-            agent.X,
-            agent.Y,
-            infectionRadius
-        );
-        
-        if (nearby == null) return;
+        spatial.FillNearbyBuffer(agent.X, agent.Y, infectionRadius, _buffer);
         
         var radiusSq = infectionRadius * infectionRadius;
         
-        foreach (var otherIndex in nearby.Where(otherIndex => otherIndex != agentIndex))
+        // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
+        foreach (var otherIndex in _buffer)
         {
+            if (otherIndex == agentIndex) continue;
+            
             ref var other = ref agents[otherIndex];
 
             if (!other.IsActive) continue;
@@ -42,9 +40,7 @@ public class InfectionSystem(SpatialGrid? spatial)
             // 주변 감염원 판정
             var isStrongInfector = other.Type is AgentType.Zombie or AgentType.RottenZombie;
 
-            var isWeakInfector = other.Type is AgentType.Carrier or AgentType.DeadZombie;
-            
-            if (!isStrongInfector && !isWeakInfector)
+            if (!isStrongInfector && other.Type is not (AgentType.Carrier or AgentType.DeadZombie))
                 continue;
 
             // 실제 거리 계산

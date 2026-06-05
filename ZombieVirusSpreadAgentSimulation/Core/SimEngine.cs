@@ -18,6 +18,10 @@ public class SimEngine
     public float ZombieSpeed;
     public float HumanSpeed;
     
+    // 추격 및 도구 관련 상수 (수정 가능)
+    public float ZombieDetectRadius;
+    public float HumanDetectRadius;
+    
     // 감염 관련 상수 (수정 가능)
     public float InfectionRadius;           // 감염 반경 (미터)
     public float StrongInfectionChance;    // 좀비/부패좀비 틱당 감염 확률 (강함)
@@ -48,6 +52,8 @@ public class SimEngine
         // SimConfig의 고급 설정값 적용
         ZombieSpeed = SimConfig.InitZombieSpeed;
         HumanSpeed = SimConfig.InitHumanSpeed;
+        ZombieDetectRadius = SimConfig.InitZombieDetectRadius;
+        HumanDetectRadius = SimConfig.InitHumanDetectRadius;
         InfectionRadius = SimConfig.InitInfectionRadius;
         StrongInfectionChance = SimConfig.InitStrongInfectionChance;
         WeakInfectionChance = SimConfig.InitWeakInfectionChance;
@@ -90,12 +96,21 @@ public class SimEngine
 
     public void Update()
     {
-        // 1. 이동 (병렬 처리)
-        Parallel.For(0, Agents.Length, ParallelOpts, i =>
+        // 1. 이동 (안전하게 순차 처리)
+        for (var i = 0; i < Agents.Length; i++)
         {
-            if (!Agents[i].IsActive) return;
-            _movement.MoveAgent(ref Agents[i], ZombieSpeed, HumanSpeed);
-        });
+            if (!Agents[i].IsActive) continue;
+            _movement.MoveAgent(
+                ref Agents[i],
+                Agents,
+                _spatial,
+                ZombieSpeed,
+                HumanSpeed,
+                ZombieDetectRadius,
+                HumanDetectRadius,
+                InfectionRadius
+            );
+        }
         
         _spatial.RebuildGrid(ref Agents, InfectionRadius);
 
@@ -111,7 +126,7 @@ public class SimEngine
                 WeakInfectionChance,
                 DirectZombieChance
             );
-            _combat?.HandleCombat(
+            _combat.HandleCombat(
                 Agents, 
                 i,
                 QueueTypeChange,
@@ -119,9 +134,9 @@ public class SimEngine
                 CombatRadius, 
                 SurvivorKillChance
             );
-            
-            ApplyPendingChanges();
         }
+        
+        ApplyPendingChanges();
         
         // 3. 시간 기반 상태 전이 (병렬 처리 가능)
         Parallel.For(0, Agents.Length, ParallelOpts, i =>
@@ -170,6 +185,7 @@ public class SimEngine
     public readonly struct EditSnapshot(SimEngine e)
     {
         public readonly float ZombieSpeed = e.ZombieSpeed, HumanSpeed = e.HumanSpeed, InfectionRadius = e.InfectionRadius;
+        public readonly float ZombieDetectRadius = e.ZombieDetectRadius, HumanDetectRadius = e.HumanDetectRadius;
         public readonly float StrongInfectionChance = e.StrongInfectionChance, WeakInfectionChance = e.WeakInfectionChance, DirectZombieChance = e.DirectZombieChance;
         public readonly float CivilianToSurvivorChance = e.CivilianToSurvivorChance, InfectedToCarrierChance = e.InfectedToCarrierChance, CarrierToZombieChance = e.CarrierToZombieChance;
         public readonly float ZombieToRottenChance = e.ZombieToRottenChance, DeadToRottenChance = e.DeadToRottenChance, RottenToVanishedChance = e.RottenToVanishedChance;

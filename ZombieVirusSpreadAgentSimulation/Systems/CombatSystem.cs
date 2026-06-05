@@ -3,16 +3,17 @@ using ZombieVirusSpreadAgentSimulation.Spatial;
 
 namespace ZombieVirusSpreadAgentSimulation.Systems;
 
-public class CombatSystem(SpatialGrid? spatial)
+public class CombatSystem(SpatialGrid spatial)
 {
+    private readonly List<int> _buffer = [];
+    
     public void HandleCombat(
         Agent[] agents,
         int agentIndex,
         Action<int, AgentType> queueTypeChange,
         float infectionRadius, 
         float combatRadius,
-        double survivorKillChance
-    )
+        double survivorKillChance)
     {
         ref var agent = ref agents[agentIndex];
         
@@ -22,18 +23,15 @@ public class CombatSystem(SpatialGrid? spatial)
         if (!agent.IsActive)
             return;
         
-        var nearby = spatial?.FillNearbyBuffer(
-            agent.X,
-            agent.Y,
-            infectionRadius
-        );
-        
-        if (nearby == null) return;
+        spatial.FillNearbyBuffer(agent.X, agent.Y, infectionRadius, _buffer);
 
         var radiusSq = combatRadius * combatRadius;
     
-        foreach (var otherIndex in nearby.Where(otherIndex => otherIndex != agentIndex))
+        // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
+        foreach (var otherIndex in _buffer)
         {
+            if (otherIndex == agentIndex) continue;
+            
             ref var other = ref agents[otherIndex];
 
             if (!other.IsActive) continue;
