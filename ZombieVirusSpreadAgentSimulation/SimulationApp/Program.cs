@@ -414,6 +414,9 @@ internal static class Program
             ("Strong Infect Chance", $"{snapshot.StrongInfectionChance:F4}", "INFECTION"),
             ("Weak Infect Chance", $"{snapshot.WeakInfectionChance:F4}", "INFECTION"),
             ("Direct Zombie Chance", $"{snapshot.DirectZombieChance:F2}", "INFECTION"),
+            ("Zombie Detect Radius", $"{snapshot.ZombieDetectRadius:F2}", "DETECT"),
+            ("Human Detect Radius", $"{snapshot.HumanDetectRadius:F2}", "DETECT"),
+            ("Zombie Separation Radius", $"{snapshot.ZombieSeparationRadius:F2}", "SPREAD"),
             ("Civilian→Survivor", $"{snapshot.CivilianToSurvivorChance:F6}", "TRANSITION"),
             ("Infected→Carrier", $"{snapshot.InfectedToCarrierChance:F4}", "TRANSITION"),
             ("Carrier→Zombie", $"{snapshot.CarrierToZombieChance:F4}", "TRANSITION"),
@@ -749,16 +752,17 @@ internal static class Program
             case 3: // Zombie Detect Radius
                 engine.ZombieDetectRadius = Math.Max(0.1f, engine.ZombieDetectRadius + direction * 0.1f * multiplier);
                 break;
-            case 4: // Zombie Separation Radius
-                engine.ZombieSeparationRadius = Math.Max(0.1f, engine.ZombieSeparationRadius + direction * 0.1f * multiplier);
-                break;
-            case 5: // Human Detect Radius
+            case 4: // Human Detect Radius
                 engine.HumanDetectRadius = Math.Max(0.1f, engine.HumanDetectRadius + direction * 0.1f * multiplier);
+                break;
+            case 5: // Zombie Separation Radius
+                engine.ZombieSeparationRadius = Math.Max(0.1f, engine.ZombieSeparationRadius + direction * 0.1f * multiplier);
                 break;
             case 6: // Strong Infection Chance
                 engine.StrongInfectionChance = Math.Clamp(engine.StrongInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
-              case 7: // Weak Infection Chance               engine.WeakInfectionChance = Math.Clamp(engine.WeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
+            case 7: // Weak Infection Chance
+                engine.WeakInfectionChance = Math.Clamp(engine.WeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
             case 8: // Direct Zombie Chance
                 engine.DirectZombieChance = Math.Clamp(engine.DirectZombieChance + direction * 0.01f * multiplier, 0f, 1f);

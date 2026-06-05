@@ -18,16 +18,16 @@ public class SimEngine
     public float ZombieSpeed;
     public float HumanSpeed;
     
-    // 추격 및 도구 관련 상수 (수정 가능)
-    public float ZombieDetectRadius;
-    public float HumanDetectRadius;
-    public float ZombieSeparationRadius;
-    
     // 감염 관련 상수 (수정 가능)
     public float InfectionRadius;           // 감염 반경 (미터)
     public float StrongInfectionChance;    // 좀비/부패좀비 틱당 감염 확률 (강함)
-    public float WeakInfectionChance;      // 보균자/사망좀비 틱당 감염 확률 (약함)
+    public float WeakInfectionChance;      // 보균자 / 사망좀비 틱당 감염 확률 (약함)
     public float DirectZombieChance;       // 감염 시 즉시 좀비화 확률 (20%)
+    
+    // 감지 관련 상수 (수정 가능)
+    public float ZombieDetectRadius;
+    public float HumanDetectRadius;
+    public float ZombieSeparationRadius;
     
     // 상태 전이 관련 상수 (수정 가능)
     public float CivilianToSurvivorChance;     // 민간인 → 생존자
@@ -53,13 +53,13 @@ public class SimEngine
         // SimConfig의 고급 설정값 적용
         ZombieSpeed = SimConfig.InitZombieSpeed;
         HumanSpeed = SimConfig.InitHumanSpeed;
-        ZombieDetectRadius = SimConfig.InitZombieDetectRadius;
-        HumanDetectRadius = SimConfig.InitHumanDetectRadius;
-        ZombieSeparationRadius = SimConfig.InitZombieSeparationRadius;
         InfectionRadius = SimConfig.InitInfectionRadius;
         StrongInfectionChance = SimConfig.InitStrongInfectionChance;
         WeakInfectionChance = SimConfig.InitWeakInfectionChance;
         DirectZombieChance = SimConfig.InitDirectZombieChance;
+        ZombieDetectRadius = SimConfig.InitZombieDetectRadius;
+        HumanDetectRadius = SimConfig.InitHumanDetectRadius;
+        ZombieSeparationRadius = SimConfig.InitZombieSeparationRadius;
         CivilianToSurvivorChance = SimConfig.InitCivilianToSurvivorChance;
         InfectedToCarrierChance = SimConfig.InitInfectedToCarrierChance;
         InfectionRadius = SimConfig.InitInfectionRadius;
@@ -145,7 +145,7 @@ public class SimEngine
         Parallel.For(0, Agents.Length, ParallelOpts, i =>
         {
             if (!Agents[i].IsActive) return;
-            _stateTransitionSystem.UpdateStateTransition(
+            StateTransitionSystem.UpdateStateTransition(
                 ref Agents[i], 
                 CivilianToSurvivorChance, 
                 InfectedToCarrierChance, 
@@ -188,8 +188,8 @@ public class SimEngine
     public readonly struct EditSnapshot(SimEngine e)
     {
         public readonly float ZombieSpeed = e.ZombieSpeed, HumanSpeed = e.HumanSpeed, InfectionRadius = e.InfectionRadius;
-        public readonly float ZombieDetectRadius = e.ZombieDetectRadius, HumanDetectRadius = e.HumanDetectRadius, ZombieSeparationRadius = e.ZombieSeparationRadius;
         public readonly float StrongInfectionChance = e.StrongInfectionChance, WeakInfectionChance = e.WeakInfectionChance, DirectZombieChance = e.DirectZombieChance;
+        public readonly float ZombieDetectRadius = e.ZombieDetectRadius, HumanDetectRadius = e.HumanDetectRadius, ZombieSeparationRadius = e.ZombieSeparationRadius;
         public readonly float CivilianToSurvivorChance = e.CivilianToSurvivorChance, InfectedToCarrierChance = e.InfectedToCarrierChance, CarrierToZombieChance = e.CarrierToZombieChance;
         public readonly float ZombieToRottenChance = e.ZombieToRottenChance, DeadToRottenChance = e.DeadToRottenChance, RottenToVanishedChance = e.RottenToVanishedChance;
         public readonly float CombatRadius = e.CombatRadius, SurvivorKillChance = e.SurvivorKillChance;

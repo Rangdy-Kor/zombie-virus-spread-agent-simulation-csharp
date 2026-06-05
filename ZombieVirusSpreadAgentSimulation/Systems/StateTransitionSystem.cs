@@ -1,11 +1,10 @@
-using System.Diagnostics.CodeAnalysis;
 using ZombieVirusSpreadAgentSimulation.Core;
 
 namespace ZombieVirusSpreadAgentSimulation.Systems;
 
 public class StateTransitionSystem
 {
-    public void UpdateStateTransition(
+    public static void UpdateStateTransition(
         ref Agent agent, 
         float civilianToSurvivorChance,
         float infectedToCarrierChance, 
