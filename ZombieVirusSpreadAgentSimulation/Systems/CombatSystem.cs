@@ -43,7 +43,7 @@ public class CombatSystem(SpatialGrid spatial)
             // 실제 거리 계산
             var dx = agent.X - other.X;
             var dy = agent.Y - other.Y;
-
+    
             var distSq = dx * dx + dy * dy;
 
             if (distSq > radiusSq) continue;
