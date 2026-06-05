@@ -7,6 +7,7 @@ public class MovementSystem
 {
     private readonly List<int> _buffer = [];
     private readonly List<int> _separationBuffer = [];
+    private readonly List<(float X, float Y, float DistSq)> _candidates = [];
     
     public void MoveAgent(
         ref Agent agent,
@@ -16,6 +17,7 @@ public class MovementSystem
         float humanSpeed,
         float zombieDetectRadius,
         float humanDetectRadius,
+        float zombieSeparationRadius,
         float infectionRadius)
     {
         // 사망했거나 소멸한 개체는 움직이지 않음
@@ -26,7 +28,7 @@ public class MovementSystem
         if (agent.Type == AgentType.Zombie)
         {
             // 좀비: 감지 반경 내 가장 가까운 인간을 추적
-            var target = FindNearestHuman(ref agent, agents, spatial, zombieDetectRadius, infectionRadius);
+            var target = FindTargetHuman(ref agent, agents, spatial, zombieDetectRadius, infectionRadius);
 
             if (target.HasValue)
             {
@@ -50,11 +52,11 @@ public class MovementSystem
                 }
                     
                 // 2. 분리 방향 (Separation)
-                var (sepX, sepY) = CalcSeparation(ref agent, agents, spatial, zombieDetectRadius * 0.5f, infectionRadius);
+                var (sepX, sepY) = CalcSeparation(ref agent, agents, spatial, zombieSeparationRadius * 0.5f, infectionRadius);
 
                 // 3. 합산
-                const float seekWeight = 0.7f;
-                const float separationWeight = 0.3f;
+                const float seekWeight = 0.55f;
+                const float separationWeight = 0.45f;
                 var finalX = seekX * seekWeight + sepX * separationWeight;
                 var finalY = seekY * seekWeight + sepY * separationWeight;
 
@@ -113,39 +115,43 @@ public class MovementSystem
     }
     
     // 감지 반경 내 가장 가까운 인간 탐색
-    private (float X, float Y)? FindNearestHuman(
+    private (float X, float Y)? FindTargetHuman(
         ref Agent agent,
         Agent[] agents,
         SpatialGrid spatial,
         float detectRadius,
         float infectionRadius)
     {
-        // 감지 반경을 셀 크기(infectionRadius)로 나눠 탐색 범위 결정
         var searchRange = (int)MathF.Ceiling(detectRadius / infectionRadius);
         spatial.FillNearbyBuffer(agent.X, agent.Y, infectionRadius, _buffer, searchRange);
 
         var detectRadiusSq = detectRadius * detectRadius;
-        var nearestDistSq = float.MaxValue;
-        (float X, float Y)? nearest = null;
+    
+        // 후보 목록 초기화
+        _candidates.Clear();
 
         foreach (var idx in _buffer)
         {
             ref var other = ref agents[idx];
-            if (other.Type is not (AgentType.Civilian or AgentType.Survivor
-                or AgentType.InfectedCivilian or AgentType.InfectedSurvivor or AgentType.Carrier))
+            if (other.Type is not (AgentType.Civilian or AgentType.Survivor))
                 continue;
 
             var ddx = other.X - agent.X;
             var ddy = other.Y - agent.Y;
             var distSq = ddx * ddx + ddy * ddy;
 
-            if (distSq > detectRadiusSq || distSq >= nearestDistSq) continue;
-
-            nearestDistSq = distSq;
-            nearest = (other.X, other.Y);
+            if (distSq > detectRadiusSq) continue;
+            _candidates.Add((other.X, other.Y, distSq));
         }
 
-        return nearest;
+        if (_candidates.Count == 0) return null;
+
+        // 가장 가까운 순으로 정렬 후 상위 3명 중 랜덤 선택
+        _candidates.Sort((a, b) => a.DistSq.CompareTo(b.DistSq));
+        var pickCount = Math.Min(3, _candidates.Count);
+        var picked = _candidates[Random.Shared.Next(pickCount)];
+    
+        return (picked.X, picked.Y);
     }
     
     // 주변 모든 좀비의 합산 방향 반대 벡터 계산
@@ -211,7 +217,8 @@ public class MovementSystem
 
 
             // 가까울수록 강하게 밀어냄 (거리 역수로 가중치)
-            var weight = 1f / distSq;
+            var dist = MathF.Sqrt(distSq);
+            var weight = 1f / dist;
             sumX += ddx * weight;
             sumY += ddy * weight;
         }

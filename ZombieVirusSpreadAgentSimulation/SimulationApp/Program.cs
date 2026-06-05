@@ -749,40 +749,42 @@ internal static class Program
             case 3: // Zombie Detect Radius
                 engine.ZombieDetectRadius = Math.Max(0.1f, engine.ZombieDetectRadius + direction * 0.1f * multiplier);
                 break;
-            case 4: // Human Detect Radius
+            case 4: // Zombie Separation Radius
+                engine.ZombieSeparationRadius = Math.Max(0.1f, engine.ZombieSeparationRadius + direction * 0.1f * multiplier);
+                break;
+            case 5: // Human Detect Radius
                 engine.HumanDetectRadius = Math.Max(0.1f, engine.HumanDetectRadius + direction * 0.1f * multiplier);
                 break;
-            case 5: // Strong Infection Chance
+            case 6: // Strong Infection Chance
                 engine.StrongInfectionChance = Math.Clamp(engine.StrongInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
-            case 6: // Weak Infection Chance
-                engine.WeakInfectionChance = Math.Clamp(engine.WeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
+              case 7: // Weak Infection Chance               engine.WeakInfectionChance = Math.Clamp(engine.WeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
-            case 7: // Direct Zombie Chance
+            case 8: // Direct Zombie Chance
                 engine.DirectZombieChance = Math.Clamp(engine.DirectZombieChance + direction * 0.01f * multiplier, 0f, 1f);
                 break;
-            case 8: // Civilian to Survivor
+            case 9: // Civilian to Survivor
                 engine.CivilianToSurvivorChance = Math.Clamp(engine.CivilianToSurvivorChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
-            case 9: // Infected to Carrier
+            case 10: // Infected to Carrier
                 engine.InfectedToCarrierChance = Math.Clamp(engine.InfectedToCarrierChance + direction * 0.001f * multiplier, 0f, 1f);
                 break;
-            case 10: // Carrier to Zombie
+            case 11: // Carrier to Zombie
                 engine.CarrierToZombieChance = Math.Clamp(engine.CarrierToZombieChance + direction * 0.001f * multiplier, 0f, 1f);
                 break;
-            case 11: // Zombie to Rotten
+            case 12: // Zombie to Rotten
                 engine.ZombieToRottenChance = Math.Clamp(engine.ZombieToRottenChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
-            case 12: // Dead to Rotten
+            case 13: // Dead to Rotten
                 engine.DeadToRottenChance = Math.Clamp(engine.DeadToRottenChance + direction * 0.0001f * multiplier, 0f, 1f);
                 break;
-            case 13: // Rotten to Vanished
+            case 14: // Rotten to Vanished
                 engine.RottenToVanishedChance = Math.Clamp(engine.RottenToVanishedChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
-            case 14: // Combat Radius
+            case 15: // Combat Radius
                 engine.CombatRadius = Math.Max(0.1f, engine.CombatRadius + direction * 0.1f * multiplier);
                 break;
-            case 15: // Survivor Kill Chance
+            case 16: // Survivor Kill Chance
                 engine.SurvivorKillChance = Math.Clamp(engine.SurvivorKillChance + direction * 0.01f * multiplier, 0f, 1f);
                 break;
         }

@@ -21,6 +21,7 @@ public class SimEngine
     // 추격 및 도구 관련 상수 (수정 가능)
     public float ZombieDetectRadius;
     public float HumanDetectRadius;
+    public float ZombieSeparationRadius;
     
     // 감염 관련 상수 (수정 가능)
     public float InfectionRadius;           // 감염 반경 (미터)
@@ -54,6 +55,7 @@ public class SimEngine
         HumanSpeed = SimConfig.InitHumanSpeed;
         ZombieDetectRadius = SimConfig.InitZombieDetectRadius;
         HumanDetectRadius = SimConfig.InitHumanDetectRadius;
+        ZombieSeparationRadius = SimConfig.InitZombieSeparationRadius;
         InfectionRadius = SimConfig.InitInfectionRadius;
         StrongInfectionChance = SimConfig.InitStrongInfectionChance;
         WeakInfectionChance = SimConfig.InitWeakInfectionChance;
@@ -108,6 +110,7 @@ public class SimEngine
                 HumanSpeed,
                 ZombieDetectRadius,
                 HumanDetectRadius,
+                ZombieSeparationRadius,
                 InfectionRadius
             );
         }
@@ -185,7 +188,7 @@ public class SimEngine
     public readonly struct EditSnapshot(SimEngine e)
     {
         public readonly float ZombieSpeed = e.ZombieSpeed, HumanSpeed = e.HumanSpeed, InfectionRadius = e.InfectionRadius;
-        public readonly float ZombieDetectRadius = e.ZombieDetectRadius, HumanDetectRadius = e.HumanDetectRadius;
+        public readonly float ZombieDetectRadius = e.ZombieDetectRadius, HumanDetectRadius = e.HumanDetectRadius, ZombieSeparationRadius = e.ZombieSeparationRadius;
         public readonly float StrongInfectionChance = e.StrongInfectionChance, WeakInfectionChance = e.WeakInfectionChance, DirectZombieChance = e.DirectZombieChance;
         public readonly float CivilianToSurvivorChance = e.CivilianToSurvivorChance, InfectedToCarrierChance = e.InfectedToCarrierChance, CarrierToZombieChance = e.CarrierToZombieChance;
         public readonly float ZombieToRottenChance = e.ZombieToRottenChance, DeadToRottenChance = e.DeadToRottenChance, RottenToVanishedChance = e.RottenToVanishedChance;

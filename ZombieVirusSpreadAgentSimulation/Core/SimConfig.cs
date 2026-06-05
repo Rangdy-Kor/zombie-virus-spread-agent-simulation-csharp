@@ -7,10 +7,6 @@ public static class SimConfig
     public static int PopulationCount { get; set; } = 1000;     // 인구 
     public static float MapWidth { get; set; } = 500f;             // 맵 가로 크기 (미터)
     public static float MapHeight { get; set; } = 500f;            // 맵 세로 크기 (미터)
-    
-    // 이동 관련 감지 반경
-    public static float InitZombieDetectRadius { get; set; } = 15.0f;   // 좀비가 인간을 감지하는 반경
-    public static float InitHumanDetectRadius { get; set; } = 10.0f;    // 인간이 좀비를 감지하는 반경
 
     // 화면 설정
     public const int ScreenWidth = 1200;          // 창 가로 크기
@@ -52,8 +48,13 @@ public static class SimConfig
     // === 고급 설정 (SimEngine 초기값) ===
 
     // 이동 속도
-    public static float InitZombieSpeed { get; set; } = 1.5f;                       // 좀비 이동 속도
+    public static float InitZombieSpeed { get; set; } = 2.0f;                       // 좀비 이동 속도
     public static float InitHumanSpeed { get; set; } = 1.0f;                        // 인간 이동 속도
+    
+    // 이동 관련 감지 반경
+    public static float InitZombieDetectRadius { get; set; } = 10.0f;   // 좀비가 인간을 감지하는 반경
+    public static float InitHumanDetectRadius { get; set; } = 6.0f;    // 인간이 좀비를 감지하는 반경
+    public static float InitZombieSeparationRadius { get; set; } = 2.0f; // 좀비 분리 반경
 
     // 감염 관련
     public static float InitInfectionRadius { get; set; } = 2.0f;                   // 감염 반경 (미터)
