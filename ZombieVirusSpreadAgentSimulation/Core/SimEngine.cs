@@ -62,7 +62,6 @@ public class SimEngine
         ZombieSeparationRadius = SimConfig.InitZombieSeparationRadius;
         CivilianToSurvivorChance = SimConfig.InitCivilianToSurvivorChance;
         InfectedToCarrierChance = SimConfig.InitInfectedToCarrierChance;
-        InfectionRadius = SimConfig.InitInfectionRadius;
         CarrierToZombieChance = SimConfig.InitCarrierToZombieChance;
         ZombieToRottenChance = SimConfig.InitZombieToRottenChance;
         DeadToRottenChance = SimConfig.InitDeadToRottenChance;

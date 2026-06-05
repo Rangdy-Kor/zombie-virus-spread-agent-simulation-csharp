@@ -29,7 +29,7 @@ internal static class Program
         var editSelectedIndex = 0;
         var setupSelectedIndex = 0;
         var advancedSetupSelectedIndex = 0;
-        const int editItemCount = 14;
+        const int editItemCount = 17;  // 편집 가능한 상수 개수
         const int setupItemCount = 4;  // 3개 기본 + 1개 고급설정 메뉴
         const int advancedSetupItemCount = 14;
         
