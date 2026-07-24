@@ -9,10 +9,10 @@ internal static class Program
     private static Agent[]? _renderBuffer;
     private static readonly Dictionary<AgentType, int> StatsBuffer = new();
     private static readonly AgentType[] AllAgentTypes = Enum.GetValues<AgentType>();
-    
+
     private static volatile bool _isPaused;
     private static volatile SimEngine? _engine;
-    
+
     private static volatile int _simulationSpeed = SimConfig.TicksPerFrame;
     private static int _tickCount;
 
@@ -23,22 +23,22 @@ internal static class Program
         Raylib.SetTargetFPS(SimConfig.TargetFps);
 
         // 모드 변수
-        var isSetupMode = true;  // 시작 시 설정 모드로 시작
-        var isAdvancedSetupMode = false;  // 고급 설정 모드
+        var isSetupMode = true; // 시작 시 설정 모드로 시작
+        var isAdvancedSetupMode = false; // 고급 설정 모드
         var isEditMode = false;
         var editSelectedIndex = 0;
         var setupSelectedIndex = 0;
         var advancedSetupSelectedIndex = 0;
-        const int editItemCount = 17;  // 편집 가능한 상수 개수
-        const int setupItemCount = 4;  // 3개 기본 + 1개 고급설정 메뉴
+        const int editItemCount = 17; // 편집 가능한 상수 개수
+        const int setupItemCount = 4; // 3개 기본 + 1개 고급설정 메뉴
         const int advancedSetupItemCount = 14;
-        
+
         var cts = new CancellationTokenSource();
         var calculationTask = Task.Run(() =>
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var nextTickTime = 0.0; // 다음 틱을 실행해야 할 목표 시간 (ms)
-            
+
             while (!cts.Token.IsCancellationRequested)
             {
                 var localEngine = _engine;
@@ -50,10 +50,10 @@ internal static class Program
                     switch (waitTime)
                     {
                         case > 2:
-                            Thread.Sleep(1);       // 여유 있을 땐 Sleep
+                            Thread.Sleep(1); // 여유 있을 땐 Sleep
                             break;
                         case > 0:
-                            Thread.SpinWait(100);  // 임박했을 땐 SpinWait으로 정밀 대기
+                            Thread.SpinWait(100); // 임박했을 땐 SpinWait으로 정밀 대기
                             break;
                         default:
                         {
@@ -62,6 +62,7 @@ internal static class Program
                                 localEngine.Update();
                                 _tickCount++;
                             }
+
                             nextTickTime += msPerTick;
 
                             if (stopwatch.Elapsed.TotalMilliseconds > nextTickTime + 200)
@@ -82,22 +83,24 @@ internal static class Program
         {
             var increase = Raylib.IsKeyPressed(KeyboardKey.Right) || Raylib.IsKeyPressed(KeyboardKey.Equal);
             var decrease = Raylib.IsKeyPressed(KeyboardKey.Left) || Raylib.IsKeyPressed(KeyboardKey.Minus);
-            var bigChange = Raylib.IsKeyDown(KeyboardKey.LeftShift) ||  Raylib.IsKeyDown(KeyboardKey.RightShift);
-            var smallChange = Raylib.IsKeyDown(KeyboardKey.LeftControl) ||  Raylib.IsKeyDown(KeyboardKey.RightControl);
+            var bigChange = Raylib.IsKeyDown(KeyboardKey.LeftShift) || Raylib.IsKeyDown(KeyboardKey.RightShift);
+            var smallChange = Raylib.IsKeyDown(KeyboardKey.LeftControl) || Raylib.IsKeyDown(KeyboardKey.RightControl);
             var multiplier = 1f;
-            
+
             // 고급 설정 모드
             if (isAdvancedSetupMode)
             {
-                Raylib.SetExitKey(KeyboardKey.Null);  // ESC 키로 창이 닫히지 않도록 설정
-                
+                Raylib.SetExitKey(KeyboardKey.Null); // ESC 키로 창이 닫히지 않도록 설정
+
                 // 고급 설정 모드 입력 처리
-                if (Raylib.IsKeyPressed(KeyboardKey.Up)) advancedSetupSelectedIndex = Math.Max(advancedSetupSelectedIndex - 1, 0);
-                if (Raylib.IsKeyPressed(KeyboardKey.Down)) advancedSetupSelectedIndex = Math.Min(advancedSetupSelectedIndex + 1, advancedSetupItemCount - 1);
-                
+                if (Raylib.IsKeyPressed(KeyboardKey.Up))
+                    advancedSetupSelectedIndex = Math.Max(advancedSetupSelectedIndex - 1, 0);
+                if (Raylib.IsKeyPressed(KeyboardKey.Down))
+                    advancedSetupSelectedIndex = Math.Min(advancedSetupSelectedIndex + 1, advancedSetupItemCount - 1);
+
                 if (Raylib.IsKeyPressed(KeyboardKey.Escape) || Raylib.IsKeyPressed(KeyboardKey.Enter))
                 {
-                    isAdvancedSetupMode = false;  // 기본 설정으로 돌아감
+                    isAdvancedSetupMode = false; // 기본 설정으로 돌아감
                 }
 
                 if (increase || decrease)
@@ -106,7 +109,7 @@ internal static class Program
                     {
                         multiplier = bigChange ? 10f : 0.5f;
                     }
-                    
+
                     AdjustAdvancedSetupValue(advancedSetupSelectedIndex, increase, multiplier);
                 }
 
@@ -121,11 +124,12 @@ internal static class Program
             // 초기 설정 모드
             if (isSetupMode)
             {
-                Raylib.SetExitKey(KeyboardKey.Escape);  // ESC 키로 창을 닫을 수 있도록 다시 설정
-                
+                Raylib.SetExitKey(KeyboardKey.Escape); // ESC 키로 창을 닫을 수 있도록 다시 설정
+
                 // 설정 모드 입력 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Up)) setupSelectedIndex = Math.Max(setupSelectedIndex - 1, 0);
-                if (Raylib.IsKeyPressed(KeyboardKey.Down)) setupSelectedIndex = Math.Min(setupSelectedIndex + 1, setupItemCount - 1);
+                if (Raylib.IsKeyPressed(KeyboardKey.Down))
+                    setupSelectedIndex = Math.Min(setupSelectedIndex + 1, setupItemCount - 1);
 
                 if (increase || decrease)
                 {
@@ -133,19 +137,19 @@ internal static class Program
                     {
                         multiplier = bigChange ? 10f : 0.5f;
                     }
-                    
+
                     AdjustSetupValue(setupSelectedIndex, increase, multiplier);
                 }
 
                 // Enter 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Enter))
                 {
-                    if (setupSelectedIndex == 3)  // Advanced Settings 선택됨
+                    if (setupSelectedIndex == 3) // Advanced Settings 선택됨
                     {
                         isAdvancedSetupMode = true;
                     }
                 }
-                
+
                 if (Raylib.IsKeyPressed(KeyboardKey.K))
                 {
                     // 시뮬레이션 시작
@@ -162,9 +166,9 @@ internal static class Program
                 Raylib.EndDrawing();
                 continue;
             }
-            
-            Raylib.SetExitKey(KeyboardKey.Null);  // ESC 키로 창이 닫히지 않도록 설정
-            
+
+            Raylib.SetExitKey(KeyboardKey.Null); // ESC 키로 창이 닫히지 않도록 설정
+
             // 입력 처리
             if (Raylib.IsKeyPressed(KeyboardKey.Tab) && !isEditMode)
             {
@@ -175,8 +179,9 @@ internal static class Program
             {
                 // 편집 모드 입력 처리
                 if (Raylib.IsKeyPressed(KeyboardKey.Up)) editSelectedIndex = Math.Max(editSelectedIndex - 1, 0);
-                if (Raylib.IsKeyPressed(KeyboardKey.Down)) editSelectedIndex = Math.Min(editSelectedIndex + 1, editItemCount - 1);
-            
+                if (Raylib.IsKeyPressed(KeyboardKey.Down))
+                    editSelectedIndex = Math.Min(editSelectedIndex + 1, editItemCount - 1);
+
                 if (Raylib.IsKeyPressed(KeyboardKey.Tab) || Raylib.IsKeyPressed(KeyboardKey.Escape))
                 {
                     isEditMode = false;
@@ -189,13 +194,12 @@ internal static class Program
                     {
                         multiplier = bigChange ? 10f : 0.5f;
                     }
-    
+
                     lock (SimLock)
                     {
                         AdjustEngineValue(_engine!, editSelectedIndex, increase, multiplier);
                     }
                 }
-
             }
             else
             {
@@ -222,9 +226,9 @@ internal static class Program
                     // 버퍼 크기가 다를 때만 새로 할당
                     if (_renderBuffer == null || _renderBuffer.Length != localEngine.Agents.Length)
                         _renderBuffer = new Agent[localEngine.Agents.Length];
-        
+
                     Array.Copy(localEngine.Agents, _renderBuffer, localEngine.Agents.Length);
-                    snapshot = _renderBuffer; 
+                    snapshot = _renderBuffer;
                     if (isEditMode)
                         editSnapshot = localEngine.TakeEditSnapshot();
                 }
@@ -236,7 +240,7 @@ internal static class Program
                 : StatsBuffer;
 
             Raylib.BeginDrawing();
-            
+
             Raylib.ClearBackground(new Color(20, 20, 30, 255));
 
             var (simViewWidth, simViewHeight) = SimConfig.CalculateSimViewSize();
@@ -251,11 +255,11 @@ internal static class Program
 
             Raylib.EndDrawing();
         }
-        
+
         // 프로그램 종료 시 백그라운드 스레드도 함께 안전하게 종료
         Raylib.CloseWindow();
         await cts.CancelAsync();
-        await calculationTask; 
+        await calculationTask;
     }
 
     private static void DrawSimulationView(Agent[] agents, int x, int y, int width, int height)
@@ -286,20 +290,21 @@ internal static class Program
     {
         return type switch
         {
-            AgentType.Civilian => new Color(100, 180, 255, 255),        // 밝은 파랑 - 민간인
-            AgentType.Survivor => new Color(50, 255, 100, 255),         // 밝은 초록 - 생존자
-            AgentType.InfectedCivilian => new Color(255, 255, 100, 255),// 노랑 - 감염된 민간인
+            AgentType.Civilian => new Color(100, 180, 255, 255), // 밝은 파랑 - 민간인
+            AgentType.Survivor => new Color(50, 255, 100, 255), // 밝은 초록 - 생존자
+            AgentType.InfectedCivilian => new Color(255, 255, 100, 255), // 노랑 - 감염된 민간인
             AgentType.InfectedSurvivor => new Color(255, 200, 50, 255), // 주황 - 감염된 생존자
-            AgentType.Carrier => new Color(255, 150, 50, 255),          // 진한 주황 - 보균자
-            AgentType.Zombie => new Color(255, 50, 50, 255),            // 빨강 - 좀비
-            AgentType.DeadZombie => new Color(150, 80, 80, 255),        // 어두운 빨강 - 사망 좀비
-            AgentType.RottenZombie => new Color(100, 60, 100, 255),     // 보라 - 부패 좀비
-            AgentType.Vanished => new Color(50, 50, 50, 255),           // 회색 - 소멸
+            AgentType.Carrier => new Color(255, 150, 50, 255), // 진한 주황 - 보균자
+            AgentType.Zombie => new Color(255, 50, 50, 255), // 빨강 - 좀비
+            AgentType.DeadZombie => new Color(150, 80, 80, 255), // 어두운 빨강 - 사망 좀비
+            AgentType.RottenZombie => new Color(100, 60, 100, 255), // 보라 - 부패 좀비
+            AgentType.Vanished => new Color(50, 50, 50, 255), // 회색 - 소멸
             _ => Color.White
         };
     }
 
-    private static void DrawUiPanel(Dictionary<AgentType, int> stats, int tickCount, bool isPaused, int speed, int x, int y, bool isEditMode = false)
+    private static void DrawUiPanel(Dictionary<AgentType, int> stats, int tickCount, bool isPaused, int speed, int x,
+        int y, bool isEditMode = false)
     {
         const int lineHeight = 24;
         var currentY = y;
@@ -324,14 +329,15 @@ internal static class Program
 
 
         DrawStatSection("INFECTED", x, ref currentY, lineHeight, [
-            ("Infected Civilian", stats.GetValueOrDefault(AgentType.InfectedCivilian), GetAgentColor(AgentType.InfectedCivilian)),
-            ("Infected Survivor", stats.GetValueOrDefault(AgentType.InfectedSurvivor), GetAgentColor(AgentType.InfectedSurvivor)),
+            ("Infected Civilian", stats.GetValueOrDefault(AgentType.InfectedCivilian),
+                GetAgentColor(AgentType.InfectedCivilian)),
+            ("Infected Survivor", stats.GetValueOrDefault(AgentType.InfectedSurvivor),
+                GetAgentColor(AgentType.InfectedSurvivor)),
             ("Carrier", stats.GetValueOrDefault(AgentType.Carrier), GetAgentColor(AgentType.Carrier)),
             ("Zombie", stats.GetValueOrDefault(AgentType.Zombie), GetAgentColor(AgentType.Zombie))
         ]);
 
         DrawStatSection("ELIMINATED", x, ref currentY, lineHeight, [
-        
             ("Dead Zombie", stats.GetValueOrDefault(AgentType.DeadZombie), GetAgentColor(AgentType.DeadZombie)),
             ("Rotten Zombie", stats.GetValueOrDefault(AgentType.RottenZombie), GetAgentColor(AgentType.RottenZombie)),
             ("Vanished", stats.GetValueOrDefault(AgentType.Vanished), GetAgentColor(AgentType.Vanished))
@@ -361,7 +367,8 @@ internal static class Program
         Raylib.DrawText("[TAB] Edit Constants", x, currentY, 16, isEditMode ? Color.Yellow : Color.Gray);
     }
 
-    private static void DrawStatSection(string title, int x, ref int y, int lineHeight, (string name, int count, Color color)[] items)
+    private static void DrawStatSection(string title, int x, ref int y, int lineHeight,
+        (string name, int count, Color color)[] items)
     {
         Raylib.DrawText(title, x, y, 18, Color.White);
         y += lineHeight;
@@ -372,6 +379,7 @@ internal static class Program
             Raylib.DrawText($"{name}: {count}", x + 18, y, 16, Color.LightGray);
             y += 20;
         }
+
         y += 10;
     }
 
@@ -489,16 +497,17 @@ internal static class Program
         // 설명
         Raylib.DrawText("Configure initial parameters before starting", textX, currentY, 16, Color.Gray);
         currentY += 30;
-        
+
         Raylib.DrawText("Press ESC to Exit", textX, currentY, 16, Color.Gray);
         currentY += 30;
-        
+
         var popStr = $"{SimConfig.PopulationCount}";
         var widthStr = $"{SimConfig.MapWidth} m";
         var heightStr = $"{SimConfig.MapHeight} m";
-        
+
         // 설정 항목들
-        (string name, string value, string description)[] setupItems = [
+        (string name, string value, string description)[] setupItems =
+        [
             ("Population Count", popStr, "Total number of agents"),
             ("Map Width", widthStr, "Horizontal size of the map"),
             ("Map Height", heightStr, "Vertical size of the map")
@@ -537,7 +546,9 @@ internal static class Program
         {
             Raylib.DrawRectangle(textX - 10, currentY - 5, panelWidth - 40, 45, new Color(80, 60, 100, 255));
         }
-        Raylib.DrawText(">> Advanced Settings", textX, currentY, 20, isAdvancedSelected ? Color.Magenta : new Color(180, 150, 200, 255));
+
+        Raylib.DrawText(">> Advanced Settings", textX, currentY, 20,
+            isAdvancedSelected ? Color.Magenta : new Color(180, 150, 200, 255));
         Raylib.DrawText("Configure infection, combat, transition rates", textX, currentY + 22, 14, Color.Gray);
         currentY += 55;
 
@@ -568,9 +579,12 @@ internal static class Program
 
         // 실제 뷰 크기 계산 및 표시
         var (simViewWidth, simViewHeight) = SimConfig.CalculateSimViewSize();
-        Raylib.DrawText($"View: {simViewWidth} x {simViewHeight} px", textX + previewWidth + 15, currentY + 10, 14, new Color(0, 255, 255, 255));
-        Raylib.DrawText($"Ratio: {SimConfig.MapWidth}:{SimConfig.MapHeight}", textX + previewWidth + 15, currentY + 28, 14, Color.Gray);
-        Raylib.DrawText($"({(mapAspect >= 1 ? mapAspect : 1/mapAspect):F2}:1)", textX + previewWidth + 15, currentY + 46, 14, Color.Gray);
+        Raylib.DrawText($"View: {simViewWidth} x {simViewHeight} px", textX + previewWidth + 15, currentY + 10, 14,
+            new Color(0, 255, 255, 255));
+        Raylib.DrawText($"Ratio: {SimConfig.MapWidth}:{SimConfig.MapHeight}", textX + previewWidth + 15, currentY + 28,
+            14, Color.Gray);
+        Raylib.DrawText($"({(mapAspect >= 1 ? mapAspect : 1 / mapAspect):F2}:1)", textX + previewWidth + 15,
+            currentY + 46, 14, Color.Gray);
 
         // 하단 안내
         currentY = panelY + panelHeight - 80;
@@ -603,7 +617,8 @@ internal static class Program
         currentY += 40;
 
         // 편집 항목들
-        (string name, string value, string category)[] advancedItems = [
+        (string name, string value, string category)[] advancedItems =
+        [
             ("Zombie Speed", $"{SimConfig.InitZombieSpeed:F2}", "MOVEMENT"),
             ("Human Speed", $"{SimConfig.InitHumanSpeed:F2}", "MOVEMENT"),
             ("Infection Radius", $"{SimConfig.InitInfectionRadius:F2}", "INFECTION"),
@@ -675,40 +690,51 @@ internal static class Program
                 SimConfig.InitHumanSpeed = Math.Max(0.1f, SimConfig.InitHumanSpeed + direction * 0.1f * multiplier);
                 break;
             case 2: // Infection Radius
-                SimConfig.InitInfectionRadius = Math.Max(0.1f, SimConfig.InitInfectionRadius + direction * 0.1f * multiplier);
+                SimConfig.InitInfectionRadius =
+                    Math.Max(0.1f, SimConfig.InitInfectionRadius + direction * 0.1f * multiplier);
                 break;
             case 3: // Strong Infection Chance
-                SimConfig.InitStrongInfectionChance = Math.Clamp(SimConfig.InitStrongInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
+                SimConfig.InitStrongInfectionChance =
+                    Math.Clamp(SimConfig.InitStrongInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
             case 4: // Weak Infection Chance
-                SimConfig.InitWeakInfectionChance = Math.Clamp(SimConfig.InitWeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
+                SimConfig.InitWeakInfectionChance =
+                    Math.Clamp(SimConfig.InitWeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
             case 5: // Direct Zombie Chance
-                SimConfig.InitDirectZombieChance = Math.Clamp(SimConfig.InitDirectZombieChance + direction * 0.01f * multiplier, 0f, 1f);
+                SimConfig.InitDirectZombieChance =
+                    Math.Clamp(SimConfig.InitDirectZombieChance + direction * 0.01f * multiplier, 0f, 1f);
                 break;
             case 6: // Civilian to Survivor
-                SimConfig.InitCivilianToSurvivorChance = Math.Clamp(SimConfig.InitCivilianToSurvivorChance + direction * 0.00001f * multiplier, 0f, 1f);
+                SimConfig.InitCivilianToSurvivorChance =
+                    Math.Clamp(SimConfig.InitCivilianToSurvivorChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
             case 7: // Infected to Carrier
-                SimConfig.InitInfectedToCarrierChance = Math.Clamp(SimConfig.InitInfectedToCarrierChance + direction * 0.001f * multiplier, 0f, 1f);
+                SimConfig.InitInfectedToCarrierChance =
+                    Math.Clamp(SimConfig.InitInfectedToCarrierChance + direction * 0.001f * multiplier, 0f, 1f);
                 break;
             case 8: // Carrier to Zombie
-                SimConfig.InitCarrierToZombieChance = Math.Clamp(SimConfig.InitCarrierToZombieChance + direction * 0.001f * multiplier, 0f, 1f);
+                SimConfig.InitCarrierToZombieChance =
+                    Math.Clamp(SimConfig.InitCarrierToZombieChance + direction * 0.001f * multiplier, 0f, 1f);
                 break;
             case 9: // Zombie to Rotten
-                SimConfig.InitZombieToRottenChance = Math.Clamp(SimConfig.InitZombieToRottenChance + direction * 0.00001f * multiplier, 0f, 1f);
+                SimConfig.InitZombieToRottenChance =
+                    Math.Clamp(SimConfig.InitZombieToRottenChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
             case 10: // Dead to Rotten
-                SimConfig.InitDeadToRottenChance = Math.Clamp(SimConfig.InitDeadToRottenChance + direction * 0.0001f * multiplier, 0f, 1f);
+                SimConfig.InitDeadToRottenChance =
+                    Math.Clamp(SimConfig.InitDeadToRottenChance + direction * 0.0001f * multiplier, 0f, 1f);
                 break;
             case 11: // Rotten to Vanished
-                SimConfig.InitRottenToVanishedChance = Math.Clamp(SimConfig.InitRottenToVanishedChance + direction * 0.00001f * multiplier, 0f, 1f);
+                SimConfig.InitRottenToVanishedChance =
+                    Math.Clamp(SimConfig.InitRottenToVanishedChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
             case 12: // Combat Radius
                 SimConfig.InitCombatRadius = Math.Max(0.1f, SimConfig.InitCombatRadius + direction * 0.1f * multiplier);
                 break;
             case 13: // Survivor Kill Chance
-                SimConfig.InitSurvivorKillChance = Math.Clamp(SimConfig.InitSurvivorKillChance + direction * 0.01f * multiplier, 0f, 1f);
+                SimConfig.InitSurvivorKillChance =
+                    Math.Clamp(SimConfig.InitSurvivorKillChance + direction * 0.01f * multiplier, 0f, 1f);
                 break;
         }
     }
@@ -720,7 +746,8 @@ internal static class Program
         switch (index)
         {
             case 0: // Population Count
-                SimConfig.PopulationCount = Math.Max(10, SimConfig.PopulationCount + (int)(direction * 100f * multiplier));
+                SimConfig.PopulationCount =
+                    Math.Max(10, SimConfig.PopulationCount + (int)(direction * 100f * multiplier));
                 break;
             case 1: // Map Width
                 SimConfig.MapWidth = Math.Max(50f, SimConfig.MapWidth + direction * 50f * multiplier);
@@ -756,40 +783,51 @@ internal static class Program
                 engine.HumanDetectRadius = Math.Max(0.1f, engine.HumanDetectRadius + direction * 0.1f * multiplier);
                 break;
             case 5: // Zombie Separation Radius
-                engine.ZombieSeparationRadius = Math.Max(0.1f, engine.ZombieSeparationRadius + direction * 0.1f * multiplier);
+                engine.ZombieSeparationRadius =
+                    Math.Max(0.1f, engine.ZombieSeparationRadius + direction * 0.1f * multiplier);
                 break;
             case 6: // Strong Infection Chance
-                engine.StrongInfectionChance = Math.Clamp(engine.StrongInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
+                engine.StrongInfectionChance =
+                    Math.Clamp(engine.StrongInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
             case 7: // Weak Infection Chance
-                engine.WeakInfectionChance = Math.Clamp(engine.WeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
+                engine.WeakInfectionChance =
+                    Math.Clamp(engine.WeakInfectionChance + direction * 0.005f * multiplier, 0f, 1f);
                 break;
             case 8: // Direct Zombie Chance
-                engine.DirectZombieChance = Math.Clamp(engine.DirectZombieChance + direction * 0.01f * multiplier, 0f, 1f);
+                engine.DirectZombieChance =
+                    Math.Clamp(engine.DirectZombieChance + direction * 0.01f * multiplier, 0f, 1f);
                 break;
             case 9: // Civilian to Survivor
-                engine.CivilianToSurvivorChance = Math.Clamp(engine.CivilianToSurvivorChance + direction * 0.00001f * multiplier, 0f, 1f);
+                engine.CivilianToSurvivorChance =
+                    Math.Clamp(engine.CivilianToSurvivorChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
             case 10: // Infected to Carrier
-                engine.InfectedToCarrierChance = Math.Clamp(engine.InfectedToCarrierChance + direction * 0.001f * multiplier, 0f, 1f);
+                engine.InfectedToCarrierChance =
+                    Math.Clamp(engine.InfectedToCarrierChance + direction * 0.001f * multiplier, 0f, 1f);
                 break;
             case 11: // Carrier to Zombie
-                engine.CarrierToZombieChance = Math.Clamp(engine.CarrierToZombieChance + direction * 0.001f * multiplier, 0f, 1f);
+                engine.CarrierToZombieChance =
+                    Math.Clamp(engine.CarrierToZombieChance + direction * 0.001f * multiplier, 0f, 1f);
                 break;
             case 12: // Zombie to Rotten
-                engine.ZombieToRottenChance = Math.Clamp(engine.ZombieToRottenChance + direction * 0.00001f * multiplier, 0f, 1f);
+                engine.ZombieToRottenChance =
+                    Math.Clamp(engine.ZombieToRottenChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
             case 13: // Dead to Rotten
-                engine.DeadToRottenChance = Math.Clamp(engine.DeadToRottenChance + direction * 0.0001f * multiplier, 0f, 1f);
+                engine.DeadToRottenChance =
+                    Math.Clamp(engine.DeadToRottenChance + direction * 0.0001f * multiplier, 0f, 1f);
                 break;
             case 14: // Rotten to Vanished
-                engine.RottenToVanishedChance = Math.Clamp(engine.RottenToVanishedChance + direction * 0.00001f * multiplier, 0f, 1f);
+                engine.RottenToVanishedChance =
+                    Math.Clamp(engine.RottenToVanishedChance + direction * 0.00001f * multiplier, 0f, 1f);
                 break;
             case 15: // Combat Radius
                 engine.CombatRadius = Math.Max(0.1f, engine.CombatRadius + direction * 0.1f * multiplier);
                 break;
             case 16: // Survivor Kill Chance
-                engine.SurvivorKillChance = Math.Clamp(engine.SurvivorKillChance + direction * 0.01f * multiplier, 0f, 1f);
+                engine.SurvivorKillChance =
+                    Math.Clamp(engine.SurvivorKillChance + direction * 0.01f * multiplier, 0f, 1f);
                 break;
         }
     }

@@ -5,11 +5,11 @@ namespace ZombieVirusSpreadAgentSimulation.Systems;
 public class StateTransitionSystem
 {
     public static void UpdateStateTransition(
-        ref Agent agent, 
+        ref Agent agent,
         float civilianToSurvivorChance,
-        float infectedToCarrierChance, 
-        float carrierToZombieChance, 
-        float zombieToRottenChance, 
+        float infectedToCarrierChance,
+        float carrierToZombieChance,
+        float zombieToRottenChance,
         float deadToRottenChance,
         float rottenToVanishedChance)
     {

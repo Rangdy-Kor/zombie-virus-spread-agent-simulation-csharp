@@ -4,9 +4,15 @@ namespace ZombieVirusSpreadAgentSimulation.Core;
 
 public enum AgentType
 {
-    Civilian, Survivor, 
-    InfectedCivilian, InfectedSurvivor, Carrier, Zombie,
-    DeadZombie, RottenZombie, Vanished
+    Civilian,
+    Survivor,
+    InfectedCivilian,
+    InfectedSurvivor,
+    Carrier,
+    Zombie,
+    DeadZombie,
+    RottenZombie,
+    Vanished
 }
 
 public struct Agent

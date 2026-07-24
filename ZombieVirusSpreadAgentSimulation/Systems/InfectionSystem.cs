@@ -6,7 +6,7 @@ namespace ZombieVirusSpreadAgentSimulation.Systems;
 public class InfectionSystem(SpatialGrid spatial)
 {
     private readonly List<int> _buffer = [];
-    
+
     public void HandleOverlapAndInfection(
         Agent[] agents,
         int agentIndex,
@@ -17,7 +17,7 @@ public class InfectionSystem(SpatialGrid spatial)
         double directZombieChance)
     {
         ref var agent = ref agents[agentIndex];
-        
+
         // 감염원만 처리
         if (agent.Type != AgentType.Civilian && agent.Type != AgentType.Survivor) return;
 
@@ -25,14 +25,14 @@ public class InfectionSystem(SpatialGrid spatial)
             return;
 
         spatial.FillNearbyBuffer(agent.X, agent.Y, infectionRadius, _buffer);
-        
+
         var radiusSq = infectionRadius * infectionRadius;
-        
+
         // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
         foreach (var otherIndex in _buffer)
         {
             if (otherIndex == agentIndex) continue;
-            
+
             ref var other = ref agents[otherIndex];
 
             if (!other.IsActive) continue;
@@ -59,7 +59,7 @@ public class InfectionSystem(SpatialGrid spatial)
 
             if (Random.Shared.NextDouble() >= infectionChance)
                 continue;
-            
+
             var newType =
                 Random.Shared.NextDouble() < directZombieChance
                     ? AgentType.Zombie

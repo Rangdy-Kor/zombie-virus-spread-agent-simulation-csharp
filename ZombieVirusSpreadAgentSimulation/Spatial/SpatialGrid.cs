@@ -6,9 +6,9 @@ public class SpatialGrid
 {
     private readonly Dictionary<(int, int), List<int>> _grid = new();
     private readonly List<(int, int)> _activeCells = []; // 이번 틱에 사용된 셀만 추적
-    
+
     public void RebuildGrid(
-        ref Agent[] agents, 
+        ref Agent[] agents,
         float infectionRadius)
     {
         foreach (var cell in _activeCells)
@@ -31,7 +31,7 @@ public class SpatialGrid
             list.Add(i);
         }
     }
-    
+
     // 좌표 → 셀 변환
     private static (int, int) ToCell(float x, float y, float infectionRadius)
     {
